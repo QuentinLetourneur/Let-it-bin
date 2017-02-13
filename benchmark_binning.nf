@@ -25,13 +25,13 @@ workflow.onComplete = {
 
 
 workflow.onError = {
-    println "Oops .. something when wrong"
+    println "Oops .. something went wrong"
 }
 
 params.help=false
-
+// a completer
 def usage() {
-    println("annot_vp1.nf --in <contigs_dir> --out <output_dir> --cpus <nb_cpus>")
+    println("benchmark_binning.nf --in <contigs_dir> --out <output_dir> --cpus <nb_cpus>")
 }
 
 
@@ -40,8 +40,8 @@ if(params.help){
     exit(1)
 }
 
-
-params.in="$baseDir/test/"
+//baseDir = dossier ou se trouve le script nextflow
+params.in="$baseDir/../../simulated_data/Bacteria/"
 readChannel = Channel.fromFilePairs("${params.in}/*_R{1,2}.fastq")
                      .ifEmpty { exit 1, "Cannot find any reads matching: ${params.in}" }
                      //.subscribe { println it }
@@ -50,27 +50,27 @@ readChannel = Channel.fromFilePairs("${params.in}/*_R{1,2}.fastq")
                 .fromPath("${params.in}/*.fasta")
                 .map {file -> tuple(file.baseName.replaceAll(".fasta",""),file)}*/
 
-params.cpus = 2
-params.vp1 = "$baseDir/databases/vp1_seq.fasta"
-params.ncbi = "$baseDir/databases/ncbi_viruses.fna"
-params.rvdb = "$baseDir/databases/rVDBv10.2.fasta"
-params.uniprot = "$baseDir/databases/uniprot_taxonomy.fasta"
-params.uniref = "$baseDir/databases/uniref_uniprot.fasta"
-params.viral = "$baseDir/databases/viral_catalogue_poltson.fna"
-params.out = "$baseDir/annotation/"
-//params.nt = "/local/databases/fasta/nt"
-params.nt = "/pasteur/projets/policy01/BioIT/amine/catalogue/nt"
-params.gitaxidnucl = "/local/databases/release/taxodb/gi_taxid_nucl.dmp"
-params.names = "/local/databases/release/taxodb/names.dmp"
-params.nodes = "/local/databases/release/taxodb/nodes.dmp"
-params.numberBestannotation = 10
+params.cpus = 8
+params.out = "$baseDir/../../binning_wf/"
 params.coverage = 80
 params.mismatch = 1
-params.contaminant = "$baseDir/databases/contaminant.fasta"
-params.alienseq = "$baseDir/databases/alienTrimmerPF8contaminants.fasta"
+params.alienseq = "$baseDir/../../genomes_databases/alienTrimmerPF8contaminants.fasta"
 params.minlength = 45
 params.cleaned_reads = "${params.out}/cleaned_reads"
 params.mode = "spades"
+params.contaminant = ""
+//~ params.vp1 = "$baseDir/databases/vp1_seq.fasta"
+//~ params.ncbi = "$baseDir/databases/ncbi_viruses.fna"
+//~ params.rvdb = "$baseDir/databases/rVDBv10.2.fasta"
+//~ params.uniprot = "$baseDir/databases/uniprot_taxonomy.fasta"
+//~ params.uniref = "$baseDir/databases/uniref_uniprot.fasta"
+//~ params.viral = "$baseDir/databases/viral_catalogue_poltson.fna"
+//params.nt = "/local/databases/fasta/nt"
+//~ params.nt = "/pasteur/projets/policy01/BioIT/amine/catalogue/nt"
+//~ params.gitaxidnucl = "/local/databases/release/taxodb/gi_taxid_nucl.dmp"
+//~ params.names = "/local/databases/release/taxodb/names.dmp"
+//~ params.nodes = "/local/databases/release/taxodb/nodes.dmp"
+
 
 myDir = file(params.out)
 myDir.mkdirs()
@@ -78,41 +78,63 @@ myDir.mkdirs()
 cleanDir = file("${params.cleaned_reads}")
 cleanDir.mkdirs()
 
+if(params.contaminant != "") {
+	process filtering {
+	    //publishDir "$myDir", mode: 'copy'
+	    cpus params.cpus
+	
+	    input:
+	    set pair_id, file(reads) from readChannel
+	
+	    output:
+	    set pair_id, file("unmapped/*.1"), file("unmapped/*.2") into unmappedChannel
+	    
+	    shell:
+	    """
+	    mkdir unmapped
+	    bowtie2 -q -N !{params.mismatch} -1 !{reads[0]} -2 !{reads[1]} -x ${params.contaminant} --un-conc unmapped/ -S /dev/null -p !{params.cpus}
+	    """
+	}
 
-process filtering {
-    //publishDir "$myDir", mode: 'copy'
-    cpus params.cpus
 
-    input:
-    set pair_id, file(reads) from readChannel
-
-    output:
-    set pair_id, file("unmapped/*.1"), file("unmapped/*.2") into unmappedChannel
-    
-    shell:
-    """
-    mkdir unmapped
-    bowtie2 -q -N !{params.mismatch} -1 !{reads[0]} -2 !{reads[1]}  -x ${params.contaminant} --un-conc unmapped/ -S /dev/null -p !{params.cpus}
-    """
+	process trimming {
+	    //publishDir "$myDir", mode: 'copy'
+	    cpus params.cpus
+	    
+	    input:
+	    set pair_id, file(forward), file(reverse) from unmappedChannel
+	    
+	    
+	    output:
+	    set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
+	    
+	    script:
+		"""
+		AlienTrimmer -if ${forward} -ir ${reverse} -of un-conc-mate_1.fastq 
+		-or un-conc-mate_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} 
+		-l ${params.minlength}
+		"""
+	}
 }
-
-
-process trimming {
-    //publishDir "$myDir", mode: 'copy'
-    cpus params.cpus
-    
-    input:
-    set pair_id, file(forward), file(reverse) from unmappedChannel
-    
-    
-    output:
-    set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
-    
-    script:
-    """
-AlienTrimmer -if ${forward} -ir ${reverse} -of un-conc-mate_1.fastq -or un-conc-mate_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} -l ${params.minlength}
-    """
-
+else {
+	process trimming {
+	    //publishDir "$myDir", mode: 'copy'
+	    cpus params.cpus
+	    
+	    input:
+	    set set pair_id, file(reads) from readChannel
+	    
+	    
+	    output:
+	    set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
+	    
+	    script:
+		"""
+		AlienTrimmer -if ${forward} -ir ${reverse} -of un-conc-mate_1.fastq 
+		-or un-conc-mate_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} 
+		-l ${params.minlength}
+	    """
+	}
 }
 
 process khmer {
@@ -157,7 +179,7 @@ process assembly {
     set pair_id, file(forward), file(reverse) from assemblyChannel
 
     output:
-    set pair_id, file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel
+    set pair_id, file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel mode flatten //test mode flatten
 
     shell:
     """
@@ -179,4 +201,6 @@ process assembly {
     fi
     """
 }
+//voir si stockage des assemblages
+//contigsChannel.subscribe { it.copyTo() }
 
