@@ -63,10 +63,11 @@ params.mode = "spades"
 params.contaminant = "" // prefix for the index of bowtie2 for contaminants
 params.bowt_index = "$baseDir/../../bowtie_ref"
 params.index_prefix = "" // prefix for the index of bowtie2 for analysed contigs
-params.bam_files = ""
+params.bamDir = ""
 params.mappingDir = "${params.out}/mapping" // were mapping results will be stored
 params.chkmDir = "${params.out}/chkm_res"
 params.binDir = "${params.out}/bins"
+params.skiptrim = "F"
 //~ params.vp1 = "$baseDir/databases/vp1_seq.fasta"
 //~ params.ncbi = "$baseDir/databases/ncbi_viruses.fna"
 //~ params.rvdb = "$baseDir/databases/rVDBv10.2.fasta"
@@ -112,40 +113,42 @@ if(params.contaminant != "") {
 	    input:
 	    set pair_id, file(forward), file(reverse) from unmappedChannel
 	    
-	    
-	    output:
+        output:
 	    set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
 		
 	    script:
 		"""
-		AlienTrimmer -if ${forward} -ir ${reverse} -of un-conc-mate_1.fastq 
-		-or un-conc-mate_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} 
+		AlienTrimmer -if ${forward} -ir ${reverse} -of ${pair_id}_1.fastq \
+		-or ${pair_id}_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
 		-l ${params.minlength}
 		"""
 	}
 }
-else {
+else if (params.skiptrim == "F") {
 	process trimming {
 	    //publishDir "$myDir", mode: 'copy'
 	    
 	    input:
 	    set pair_id, file(reads) from readChannel
-	    
-	    output:
+        
+        output:
 	    set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
 	    file("*.fastq") into mappingChannel mode flatten
-	    //set file("*_1.fastq"), file("*_2.fastq") into cleanReadsChannel
 	    
 	    script:
 		"""
-		AlienTrimmer -if ${reads[0]} -ir ${reads[1]} -of un-conc-mate_1.fastq 
-		-or un-conc-mate_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} 
+		AlienTrimmer -if ${reads[0]} -ir ${reads[1]} -of ${pair_id}_1.fastq \
+		-or ${pair_id}_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
 		-l ${params.minlength}
 	    """
 	}
-}
 
 mappingChannel.subscribe { it.copyTo(cleanDir) }
+}
+else {
+    trimChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"} 
+}
+
 
 process khmer {
     cpus params.cpus
@@ -163,7 +166,7 @@ process khmer {
     normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
     filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
     extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-    split-paired-reads.py output.dn.pe -1 ${pair_id}_1.fastq -2 ${pair_id}_2.fastq
+    split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
     """
 }
 
@@ -178,10 +181,11 @@ process assembly {
     }
     input:
     set pair_id, file(forward), file(reverse) from assemblyChannel
-
+    
     output:
-    set pair_id, file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel
-
+    file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel
+    file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel_2
+    
     shell:
     """
     #!/bin/bash
@@ -202,32 +206,49 @@ process assembly {
     fi
     """
 }
-// voir pour étape avec cd-hit
+// cd-hit sur les assemblages <=> regroupement des reads fw & rv -> khmer -> assemblage ??? ** sol 1 peu etre mieux pour eviter artefact ???
 
+process cdhit {
+    publishDir "${myDir}/assembly", mode: 'copy'
+    cpus params.cpus
+    clusterOptions='--qos=normal'
+    
+    input:
+    file contigs from contigsChannel.toList()
+    
+    output:
+    file("cata_contig_nr.fasta") into cdhitChannel
+    
+    shell:
+    """
+    bash /pasteur/homes/qletourn/scripts/merge_fasta.sh !{contigs}
+    cd-hit-est -i cata_contigs.fasta -o cata_contig_nr.fasta -c 0.95 -T params.cpus -aS 0.9 -d 0 -g 1 -M 0
+    """
+}
 
 bowt_refDir = file(params.bowt_index)
 bowt_refDir.mkdirs()
 
 file(params.mappingDir).mkdirs()
 
-if (params.bam_files == "" && params.index_prefix != "") {
+if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_index}/${params.index_prefix}.1.bt2").exists() ) {
 	
-	process index {
-		publishDir "$bowt_refDir", mode: 'copy'
-		cpus params.cpus
-		
-		input:
-		set pair_id, file(assembly) from contigsChannel
-		
-		output:
-		file("*.bt2") into indexChannel
-		
-		shell:
-		"""
-		bowtie2-build !{assembly} !{params.index_prefix} --threads !{cpus}
-		"""
-	}
-	
+    process index {
+        publishDir "$bowt_refDir", mode: 'copy'
+        cpus params.cpus
+        
+        input:
+        file assembly from cdhitChannel
+        
+        output:
+        file("*.bt2") into indexChannel
+        
+        shell:
+        """
+        bowtie2-build !{assembly} !{params.index_prefix} --threads !{params.cpus}
+        """
+    }
+    
 	process mapping_count {
 
 		cpus params.cpus
@@ -241,50 +262,88 @@ if (params.bam_files == "" && params.index_prefix != "") {
 		
 		shell:
 		"""
-		python /pasteur/projets/policy01/BioIT/Anita/CLEAN/script/mbma/mbma.py mapping -i !{cleanDir} -o "res_mapping" -db !{params.index_prefix} -t 6 -q hubbioit --bowtie2 --shared
-		cp -r res_mapping/"* !{params.mappingDir}/
+		python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
+		cp -r res_mapping/* !{params.mappingDir}/
 		"""
 	}
+    
+    
+    process sort_bam {
+	
+        cpus params.cpus
+        
+        input:
+        file bam from bamChannel
+        
+        output:
+        file("*.sorted") into sortedChannel
+        
+        shell:
+        """
+        samtools sort -o !{bam}.sorted -@ !{params.cpus} -O bam !{bam}
+        """
+    }
 }
-else if (params.bam_files == "" && params.index_prefix == "") {
-	exit 1, "If no bam file path is specified you have to give a prefix name for the bowtie2 index files"
+else if (params.bamDir == "" && params.index_prefix != "") {
+	
+    process mapping_count {
+
+		cpus params.cpus
+		
+		input:
+		file contig from cdhitChannel // voir si pls fichier ou pas dans ce channel
+		
+		output:
+		file("res_mapping/bam/*.bam") into bamChannel
+		file("res_mapping/comptage/count_matrix.txt") into countChannel
+		
+		shell:
+		"""
+		python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
+		cp -r res_mapping/* !{params.mappingDir}/
+		"""
+	}
+    
+    
+    process sort_bam {
+	
+        cpus params.cpus
+        
+        input:
+        file bam from bamChannel
+        
+        output:
+        file("*.sorted") into sortedChannel
+        
+        shell:
+        """
+        samtools sort -o !{bam}.sorted -@ !{params.cpus} -O bam !{bam}
+        """
+    }
 }
-
-
-process mapping_count {
-	//cpus params.cpus
-	
-	input:
-	val pair_id from contigsChannel
-	
-	output:
-	file("res_mapping/bam/*.bam") into bamChannel mode flatten
-	file("res_mapping/comptage/count_matrix.txt") into countChannel
-	
-	shell:
-	"""
-	python /pasteur/projets/policy01/BioIT/Anita/CLEAN/script/mbma/mbma.py mapping -i !{cleanDir} -o "res_mapping" -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q hubbioit --bowtie2 --shared
-	cp -r res_mapping/"* !{params.mappingDir}/
-	"""
+else if ( params.bamDir != "" ) {
+    
+    bamChannel = Channel.fromPath("${params.bamDir}/*.bam")
+    
+    process sort_bam {
+        
+        cpus params.cpus
+        
+        input:
+        file bam from bamChannel
+        
+        output:
+        file("*.sorted") into sortedChannel
+        
+        shell:
+        """
+        samtools sort -o !{bam}.sorted -@ !{params.cpus} -O bam !{bam}
+        """
+    }
 }
-
-
-process sort_bam {
-	
-	cpus params.cpus
-	
-	input:
-	file bam from bamChannel
-	
-	output:
-	file("*.sorted") into sortedChannel
-	
-	shell:
-	"""
-	samtools sort -o !{bam}.sorted -@ !{cpus} -O bam !{bam}
-	"""
+else {
+    exit 1, "If no bam file path is specified you have to give a prefix name for the bowtie2 index files"
 }
-
 // maybe give choice to use jgi_summurized... or the count_matrix of mbma for the read count 
 
 file(params.binDir).mkdirs()
@@ -294,7 +353,7 @@ process binning {
 	cpus params.cpus
 	
 	input:
-	file assembly from assemblyChannel
+	file assembly from contigsChannel_2
 	file bam from sortedChannel
 	
 	output:
@@ -302,7 +361,7 @@ process binning {
 	
 	shell:
 	"""
-	bash /pasteur/homes/qletourn/tools/metabat/runMetaBat.sh -i !{assembly} -t !{cpus} -o bin_ *.bam.sorted
+	bash /pasteur/homes/qletourn/tools/metabat/runMetaBat.sh -i !{assembly} -t !{params.cpus} -o bin_ *.bam.sorted
 	"""
 }
 
@@ -322,7 +381,7 @@ process annotaion {
 		mkdir !{params.chkmDir}
 	fi
 	
-	checkm lineage_wf -t !{cpus} -f !{params.chkmDir}/stdout.txt -x fasta --tmp_dir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} !{params.chkmDir}
+	checkm lineage_wf -t !{params.cpus} -f !{params.chkmDir}/stdout.txt -x fasta --tmp_dir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} !{params.chkmDir}
 	"""
 }
 
