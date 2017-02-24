@@ -18,11 +18,11 @@
 }*/
 
 workflow.onComplete {
-	//any worlflow property can be used here
-	if ( workflow.success ) {
-		println "Pipeline Complete"
-	}
-	println "Command line: $workflow.commandLine"
+    //any worlflow property can be used here
+    if ( workflow.success ) {
+        println "Pipeline Complete"
+    }
+    println "Command line: $workflow.commandLine"
 }
 
 
@@ -88,62 +88,61 @@ cleanDir = file("${params.cleaned_reads}")
 cleanDir.mkdirs()
 
 if(params.contaminant != "") {
-	process filtering {
-	    //publishDir "$myDir", mode: 'copy'
-	    cpus params.cpus
-		
-	    input:
-	    set pair_id, file reads from readChannel
-		
-	    output:
-	    set pair_id, file("unmapped/*.1"), file("unmapped/*.2") into unmappedChannel
-	    
-	    shell:
-	    """
-	    mkdir unmapped
-	    bowtie2 -q -N !{params.mismatch} -1 !{reads[0]} -2 !{reads[1]} -x ${params.contaminant} --un-conc unmapped/ -S /dev/null -p !{params.cpus}
-	    """
-	}
-
-
-	process trimming {
-	    //publishDir "$myDir", mode: 'copy'
-	    cpus params.cpus
-	    
-	    input:
-	    set pair_id, file(forward), file(reverse) from unmappedChannel
-	    
-        output:
-	    set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
-		
-	    script:
-		"""
-		AlienTrimmer -if ${forward} -ir ${reverse} -of ${pair_id}_1.fastq \
-		-or ${pair_id}_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
-		-l ${params.minlength}
-		"""
-	}
-}
-else if (params.skiptrim == "F") {
-	process trimming {
-	    //publishDir "$myDir", mode: 'copy'
-	    
-	    input:
-	    set pair_id, file(reads) from readChannel
+    process filtering {
+        //publishDir "$myDir", mode: 'copy'
+        cpus params.cpus
+        
+        input:
+        set pair_id, file reads from readChannel
         
         output:
-	    set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
-	    file("*.fastq") into mappingChannel mode flatten
-	    
-	    script:
-		"""
-		AlienTrimmer -if ${reads[0]} -ir ${reads[1]} -of ${pair_id}_1.fastq \
-		-or ${pair_id}_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
-		-l ${params.minlength}
-	    """
-	}
+        set pair_id, file("unmapped/*.1"), file("unmapped/*.2") into unmappedChannel
+        
+        shell:
+        """
+        mkdir unmapped
+        bowtie2 -q -N !{params.mismatch} -1 !{reads[0]} -2 !{reads[1]} -x ${params.contaminant} --un-conc unmapped/ -S /dev/null -p !{params.cpus}
+        """
+    }
 
-mappingChannel.subscribe { it.copyTo(cleanDir) }
+
+    process trimming {
+        //publishDir "$myDir", mode: 'copy'
+        cpus params.cpus
+        
+        input:
+        set pair_id, file(forward), file(reverse) from unmappedChannel
+        
+        output:
+        set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
+        
+        script:
+        """
+        AlienTrimmer -if ${forward} -ir ${reverse} -of ${pair_id}_1.fastq \
+        -or ${pair_id}_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
+        -l ${params.minlength}
+        """
+    }
+}
+else if (params.skiptrim == "F") {
+    process trimming {
+        //publishDir "$myDir", mode: 'copy'
+        
+        input:
+        set pair_id, file(reads) from readChannel
+        
+        output:
+        set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
+        file("*.fastq") into mappingChannel mode flatten
+        
+        script:
+        """
+        AlienTrimmer -if ${reads[0]} -ir ${reads[1]} -of ${pair_id}_1.fastq \
+        -or ${pair_id}_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
+        -l ${params.minlength}
+        """
+    }
+    mappingChannel.subscribe { it.copyTo(cleanDir) }
 }
 else {
     trimChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"} 
@@ -172,7 +171,7 @@ process khmer {
 
 
 process assembly {
-	// permet de copier dans myDir les fichiers de l'output
+    // permet de copier dans myDir les fichiers de l'output
     publishDir "$myDir", mode: 'copy'
     
     cpus params.cpus
@@ -233,7 +232,7 @@ bowt_refDir.mkdirs()
 file(params.mappingDir).mkdirs()
 
 if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_index}/${params.index_prefix}.1.bt2").exists() ) {
-	
+    
     process index {
         publishDir "$bowt_refDir", mode: 'copy'
         cpus params.cpus
@@ -250,27 +249,27 @@ if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         """
     }
     
-	process mapping_count {
+    process mapping_count {
 
-		//cpus params.cpus
-		
-		input:
-		file idx from indexChannel.first()
-		
-		output:
-		file("res_mapping/bam/*.bam") into bamChannel
-		file("res_mapping/comptage/count_matrix.txt") into countChannel
-		
-		shell:
-		"""
-		python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
-		cp -r res_mapping/* !{params.mappingDir}/
-		"""
-	}
+        //cpus params.cpus
+        
+        input:
+        file idx from indexChannel.first()
+        
+        output:
+        file("res_mapping/bam/*.bam") into bamChannel
+        file("res_mapping/comptage/count_matrix.txt") into countChannel
+        
+        shell:
+        """
+        python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
+        cp -r res_mapping/* !{params.mappingDir}/
+        """
+    }
     
     
     process sort_bam {
-	
+    
         cpus params.cpus
         
         input:
@@ -286,28 +285,28 @@ if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
     }
 }
 else if (params.bamDir == "" && params.index_prefix != "") {
-	
+    
     process mapping_count {
 
-		//cpus params.cpus
-		
-		input:
-		file contig from cdhitChannel // voir si pls fichier ou pas dans ce channel
-		
-		output:
-		file("res_mapping/bam/*.bam") into bamChannel mode flatten
-		file("res_mapping/comptage/count_matrix.txt") into countChannel
-		
-		shell:
-		"""
-		python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
-		cp -r res_mapping/* !{params.mappingDir}/
-		"""
-	}
+        //cpus params.cpus
+        
+        input:
+        file contig from cdhitChannel // voir si pls fichier ou pas dans ce channel
+        
+        output:
+        file("res_mapping/bam/*.bam") into bamChannel mode flatten
+        file("res_mapping/comptage/count_matrix.txt") into countChannel
+        
+        shell:
+        """
+        python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
+        cp -r res_mapping/* !{params.mappingDir}/
+        """
+    }
     
     
     process sort_bam {
-	
+    
         cpus params.cpus
         
         input:
@@ -350,43 +349,43 @@ else {
 file(params.binDir).mkdirs()
 
 process binning {
-	publishDir "${params.binDir}", mode: 'copy'
-	cpus params.cpus
-	
-	input:
-	file assembly from cdhitChannel_2
-	file bams from sortedChannel.toList()
-	
-	output:
-	file("bin*") into binChannel
-	
-	shell:
-	"""
+    publishDir "${params.binDir}", mode: 'copy'
+    cpus params.cpus
+    
+    input:
+    file assembly from cdhitChannel_2
+    file bams from sortedChannel.toList()
+    
+    output:
+    file("bin*") into binChannel
+    
+    shell:
+    """
     /pasteur/homes/qletourn/tools/metabat/jgi_summarize_bam_contig_depths --outputDepth depth.txt !{bams}
     /pasteur/homes/qletourn/tools/metabat/metabat -i !{assembly} -a depth.txt -o bin_ -t !{params.cpus} --minSamples 5
-	"""
+    """
 }
 
 
 process annotaion {
-	cpus params.cpus
-	memory "100G"
+    cpus params.cpus
+    memory "100G"
     
-	input:
-	file(bins) from binChannel.first()
-	
-	shell:
-	"""
-	if ! mkdir !{params.chkmDir} 2>/dev/null ; then
-		rm -r !{params.chkmDir}
-		mkdir !{params.chkmDir}
-	fi
-	
+    input:
+    file(bins) from binChannel.first()
+    
+    shell:
+    """
+    if ! mkdir !{params.chkmDir} 2>/dev/null ; then
+        rm -r !{params.chkmDir}
+        mkdir !{params.chkmDir}
+    fi
+    
     checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} !{params.chkmDir}
     checkm tree_qa -f !{params.chkmDir}/tree_qa.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir}
     checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir} lineage.ms
     checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa lineage.ms !{params.binDir} !{params.chkmDir}
     checkm qa -t !{params.cpus} -f qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm lineage.ms !{params.chkmDir}
-	"""
+    """
 }
 
