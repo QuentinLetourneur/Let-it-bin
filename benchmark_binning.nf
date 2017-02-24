@@ -52,7 +52,7 @@ readChannel = Channel.fromFilePairs("${params.in}/*_R{1,2}.fastq")
                 .fromPath("${params.in}/*.fasta")
                 .map {file -> tuple(file.baseName.replaceAll(".fasta",""),file)}*/
 
-params.cpus = 8
+params.cpus = 6
 params.out = "$baseDir/../../binning_wf"
 params.coverage = 80
 params.mismatch = 1
@@ -184,7 +184,7 @@ process assembly {
     
     output:
     file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel
-    file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel_2
+    //file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel_2
     
     shell:
     """
@@ -218,6 +218,7 @@ process cdhit {
     
     output:
     file("cata_contig_nr.fasta") into cdhitChannel
+    file("cata_contig_nr.fasta") into cdhitChannel_2
     
     shell:
     """
@@ -251,7 +252,7 @@ if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
     
 	process mapping_count {
 
-		cpus params.cpus
+		//cpus params.cpus
 		
 		input:
 		file idx from indexChannel.first()
@@ -288,13 +289,13 @@ else if (params.bamDir == "" && params.index_prefix != "") {
 	
     process mapping_count {
 
-		cpus params.cpus
+		//cpus params.cpus
 		
 		input:
 		file contig from cdhitChannel // voir si pls fichier ou pas dans ce channel
 		
 		output:
-		file("res_mapping/bam/*.bam") into bamChannel
+		file("res_mapping/bam/*.bam") into bamChannel mode flatten
 		file("res_mapping/comptage/count_matrix.txt") into countChannel
 		
 		shell:
@@ -353,35 +354,39 @@ process binning {
 	cpus params.cpus
 	
 	input:
-	file assembly from contigsChannel_2
-	file bam from sortedChannel
+	file assembly from cdhitChannel_2
+	file bams from sortedChannel.toList()
 	
 	output:
-	file("bin_*") into binChannel
+	file("bin*") into binChannel
 	
 	shell:
 	"""
-	bash /pasteur/homes/qletourn/tools/metabat/runMetaBat.sh -i !{assembly} -t !{params.cpus} -o bin_ *.bam.sorted
+	/pasteur/homes/qletourn/tools/metabat/jgi_summarize_bam_contig_depths --outputDepth depth.txt !{bams}
+    /pasteur/homes/qletourn/tools/metabat/metabat -i !{assembly} -a depth.txt -o bin_ -t !{params.cpus} --minSamples 5
 	"""
 }
 
 
 process annotaion {
 	cpus params.cpus
-	
+	memory "100G"
+    
 	input:
-	file(bins) from binChannel
+	file(bins) from binChannel.first()
 	
 	shell:
 	"""
-	if ! mkdir !{params.chkmDir} 2>/dev/null; then
-		rm -Ir !{params.chkmDir}/*
-		mkdir !{params.chkmDir}
-	else
+	if ! mkdir !{params.chkmDir} 2>/dev/null ; then
+		rm -r !{params.chkmDir}
 		mkdir !{params.chkmDir}
 	fi
 	
-	checkm lineage_wf -t !{params.cpus} -f !{params.chkmDir}/stdout.txt -x fasta --tmp_dir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} !{params.chkmDir}
+	checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} !{params.chkmDir}
+    checkm tree_qa -f !{params.chkmDir}/tree_qa.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir}
+    checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir} lineage.ms
+    checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa lineage.ms !{params.binDir} !{params.chkmDir}
+    checkm qa -t !{params.cpus} -f qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm lineage.ms !{params.chkmDir}
 	"""
 }
 
