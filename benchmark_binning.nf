@@ -362,7 +362,7 @@ process binning {
 	
 	shell:
 	"""
-	/pasteur/homes/qletourn/tools/metabat/jgi_summarize_bam_contig_depths --outputDepth depth.txt !{bams}
+    /pasteur/homes/qletourn/tools/metabat/jgi_summarize_bam_contig_depths --outputDepth depth.txt !{bams}
     /pasteur/homes/qletourn/tools/metabat/metabat -i !{assembly} -a depth.txt -o bin_ -t !{params.cpus} --minSamples 5
 	"""
 }
@@ -382,7 +382,7 @@ process annotaion {
 		mkdir !{params.chkmDir}
 	fi
 	
-	checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} !{params.chkmDir}
+    checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} !{params.chkmDir}
     checkm tree_qa -f !{params.chkmDir}/tree_qa.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir}
     checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir} lineage.ms
     checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa lineage.ms !{params.binDir} !{params.chkmDir}
