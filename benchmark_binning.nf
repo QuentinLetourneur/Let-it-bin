@@ -107,7 +107,7 @@ if(params.contaminant != "") {
 
 
     process trimming {
-        //publishDir "$myDir", mode: 'copy'
+        //publishDir "$cleanDir", mode: 'copy'
         cpus params.cpus
         
         input:
@@ -115,12 +115,36 @@ if(params.contaminant != "") {
         
         output:
         set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
+        file("*.fastq") into mappingChannel mode flatten
         
         script:
         """
         AlienTrimmer -if ${forward} -ir ${reverse} -of ${pair_id}_1.fastq \
         -or ${pair_id}_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
         -l ${params.minlength}
+        """
+    }
+    mappingChannel.subscribe { it.copyTo(cleanDir) }
+    
+    process khmer {
+        cpus params.cpus
+        memory "50000"
+        
+        if ( params.skiptrim == "F" ) {
+            input:
+            set pair_id, file(forward), file(reverse) from trimChannel
+        }
+        
+        output:
+        set pair_id, file("*_1.fastq"), file("*_2.fastq") into assemblyChannel
+        
+        script:
+        """
+        interleave-reads.py ${forward} ${reverse} --output interleaved.pe
+        normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+        filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+        extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+        split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
         """
     }
 }
@@ -143,30 +167,51 @@ else if (params.skiptrim == "F") {
         """
     }
     mappingChannel.subscribe { it.copyTo(cleanDir) }
+    
+    process khmer {
+        cpus params.cpus
+        memory "50000"
+        
+        if ( params.skiptrim == "F" ) {
+            input:
+            set pair_id, file(forward), file(reverse) from trimChannel
+        }
+        
+        output:
+        set pair_id, file("*_1.fastq"), file("*_2.fastq") into assemblyChannel
+        
+        script:
+        """
+        interleave-reads.py ${forward} ${reverse} --output interleaved.pe
+        normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+        filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+        extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+        split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+        """
+    }
 }
 else {
-    trimChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"} 
-}
-
-
-process khmer {
-    cpus params.cpus
-    memory "50000"
+    trimChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"}
     
-    input:
-    set pair_id, file(forward), file(reverse) from trimChannel
-    
-    output:
-    set pair_id, file("*_1.fastq"), file("*_2.fastq") into assemblyChannel
-    
-    script:
-    """
-    interleave-reads.py ${forward} ${reverse} --output interleaved.pe
-    normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-    filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-    extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-    split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-    """
+    process khmer {
+        cpus params.cpus
+        memory "50000"
+        
+        input:
+        set pair_id, file(read) from trimChannel
+        
+        output:
+        set pair_id, file("*_1.fastq"), file("*_2.fastq") into assemblyChannel
+        
+        script:
+        """
+        interleave-reads.py ${read[0]} ${read[1]} --output interleaved.pe
+        normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+        filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+        extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+        split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+        """
+    }
 }
 
 
@@ -257,7 +302,7 @@ if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         file idx from indexChannel.first()
         
         output:
-        file("res_mapping/bam/*.bam") into bamChannel
+        file("res_mapping/bam/*.bam") into bamChannel mode flatten
         file("res_mapping/comptage/count_matrix.txt") into countChannel
         
         shell:
