@@ -130,10 +130,8 @@ if(params.contaminant != "") {
         cpus params.cpus
         memory "50000"
         
-        if ( params.skiptrim == "F" ) {
-            input:
-            set pair_id, file(forward), file(reverse) from trimChannel
-        }
+        input:
+        set pair_id, file(forward), file(reverse) from trimChannel
         
         output:
         set pair_id, file("*_1.fastq"), file("*_2.fastq") into assemblyChannel
@@ -172,10 +170,8 @@ else if (params.skiptrim == "F") {
         cpus params.cpus
         memory "50000"
         
-        if ( params.skiptrim == "F" ) {
-            input:
-            set pair_id, file(forward), file(reverse) from trimChannel
-        }
+        input:
+        set pair_id, file(forward), file(reverse) from trimChannel
         
         output:
         set pair_id, file("*_1.fastq"), file("*_2.fastq") into assemblyChannel
@@ -411,7 +407,7 @@ process binning {
     shell:
     """
     /pasteur/homes/qletourn/tools/metabat/jgi_summarize_bam_contig_depths --outputDepth depth.txt !{bams}
-    /pasteur/homes/qletourn/tools/metabat/metabat -i !{assembly} -a depth.txt -o bin_ -t !{params.cpus} --minSamples 5
+    /pasteur/homes/qletourn/tools/metabat/metabat -i !{assembly} -a depth.txt -o bin -t !{params.cpus} --minSamples 5
     """
 }
 
