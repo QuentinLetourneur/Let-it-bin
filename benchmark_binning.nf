@@ -309,6 +309,8 @@ if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         """
         python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
         cp -r res_mapping/* !{params.mappingDir}/
+        rm -r !{params.mappingDir}/sam
+        bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh !{params.mappingDir} !{params.mappingDir}/res_mapping.tsv
         """
     }
     
@@ -346,6 +348,8 @@ else if (params.bamDir == "" && params.index_prefix != "") {
         """
         python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
         cp -r res_mapping/* !{params.mappingDir}/
+        rm -r !{params.mappingDir}/sam
+        bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh !{params.mappingDir} !{params.mappingDir}/res_mapping.tsv
         """
     }
     
@@ -428,9 +432,9 @@ process annotaion {
     
     checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} !{params.chkmDir}
     checkm tree_qa -f !{params.chkmDir}/tree_qa.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir}
-    checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir} lineage.ms
-    checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa lineage.ms !{params.binDir} !{params.chkmDir}
-    checkm qa -t !{params.cpus} -f qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm lineage.ms !{params.chkmDir}
+    checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir} !{params.chkmDir}/lineage.ms
+    checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa !{params.chkmDir}/lineage.ms !{params.binDir} !{params.chkmDir}
+    checkm qa -t !{params.cpus} -f !{params.chkmDir}/qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm lineage.ms !{params.chkmDir}
     """
 }
 
