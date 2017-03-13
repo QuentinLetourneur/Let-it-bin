@@ -65,16 +65,15 @@ params.bowt_index = "$baseDir/../../bowtie_ref"
 params.index_prefix = "" // prefix for the index of bowtie2 for analysed contigs
 params.bamDir = ""
 params.mappingDir = "${params.out}/mapping" // were mapping results will be stored
-params.chkmDir = "${params.out}/chkm_res"
 params.binDir = "${params.out}/bins"
 params.skiptrim = "F"
+//~ params.chkmDir = "${params.out}/chkm_res"
 //~ params.vp1 = "$baseDir/databases/vp1_seq.fasta"
 //~ params.ncbi = "$baseDir/databases/ncbi_viruses.fna"
 //~ params.rvdb = "$baseDir/databases/rVDBv10.2.fasta"
 //~ params.uniprot = "$baseDir/databases/uniprot_taxonomy.fasta"
 //~ params.uniref = "$baseDir/databases/uniref_uniprot.fasta"
 //~ params.viral = "$baseDir/databases/viral_catalogue_poltson.fna"
-//~ params.nt = "/local/databases/fasta/nt"
 //~ params.nt = "/pasteur/projets/policy01/BioIT/amine/catalogue/nt"
 //~ params.gitaxidnucl = "/local/databases/release/taxodb/gi_taxid_nucl.dmp"
 //~ params.names = "/local/databases/release/taxodb/names.dmp"
@@ -246,7 +245,7 @@ process assembly {
     fi
     """
 }
-// cd-hit sur les assemblages <=> regroupement des reads fw & rv -> khmer -> assemblage ??? ** sol 1 peu etre mieux pour eviter artefact ???
+
 
 process cdhit {
     publishDir "${myDir}/assembly", mode: 'copy'
@@ -263,7 +262,7 @@ process cdhit {
     shell:
     """
     bash /pasteur/homes/qletourn/scripts/merge_fasta.sh !{contigs}
-    cd-hit-est -i cata_contigs.fasta -o cata_contig_nr.fasta -c 0.95 -T params.cpus -aS 0.9 -d 0 -g 1 -M 0
+    cd-hit-est -i cata_contigs.fasta -o cata_contig_nr.fasta -c 0.95 -T !{params.cpus} -aS 0.9 -d 0 -g 1 -M 0
     """
 }
 
@@ -303,7 +302,7 @@ if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         
         shell:
         """
-        python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
+        mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
         cp -r res_mapping/* !{params.mappingDir}/
         rm -r !{params.mappingDir}/sam
         bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh !{params.mappingDir} !{params.mappingDir}/res_mapping.tsv
@@ -334,7 +333,7 @@ else if (params.bamDir == "" && params.index_prefix != "") {
         //cpus params.cpus
         
         input:
-        file contig from cdhitChannel // voir si pls fichier ou pas dans ce channel
+        file contig from cdhitChannel
         
         output:
         file("res_mapping/bam/*.bam") into bamChannel mode flatten
@@ -342,7 +341,7 @@ else if (params.bamDir == "" && params.index_prefix != "") {
         
         shell:
         """
-        python /pasteur/projets/policy01/Matrix/metagenomics/mbma_tars/mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
+        mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
         cp -r res_mapping/* !{params.mappingDir}/
         rm -r !{params.mappingDir}/sam
         bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh !{params.mappingDir} !{params.mappingDir}/res_mapping.tsv
@@ -419,18 +418,25 @@ process annotaion {
     input:
     file(bins) from binChannel.first()
     
+    output:
+    file("chkm_res/tree_qa+qa.tsv") into annotChannel
+    
     shell:
     """
-    if ! mkdir !{params.chkmDir} 2>/dev/null ; then
-        rm -r !{params.chkmDir}
-        mkdir !{params.chkmDir}
+    if ! mkdir chkm_res 2>/dev/null ; then
+        rm -r chkm_res
+        mkdir chkm_res
     fi
     
-    checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} !{params.chkmDir}
-    checkm tree_qa -f !{params.chkmDir}/tree_qa.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir}
-    checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.chkmDir} !{params.chkmDir}/lineage.ms
-    checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa !{params.chkmDir}/lineage.ms !{params.binDir} !{params.chkmDir}
-    checkm qa -t !{params.cpus} -f !{params.chkmDir}/qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm lineage.ms !{params.chkmDir}
+    checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} chkm_res
+    checkm tree_qa -f chkm_res/tree_qa.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res
+    checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res chkm_res/lineage.ms
+    checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa chkm_res/lineage.ms !{params.binDir} chkm_res
+    checkm qa -t !{params.cpus} -f chkm_res/qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm lineage.ms chkm_res
+     
+    join -t $'\t' -1 1 -2 1 -o 1.1,1.4,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,2.10,2.11,2.12,2.13,2.14 <(tail -n +2 chkm_res/tree_qa.tsv | sort -k1,1) <(tail -n +2 chkm_res/qa_res.tsv | sort -k1,1) | sed '1s/^/Bin id\tTaxonomy\tMarker lineage\t# genomes\t# markers\tmarker sets\t0\t1\t2\t3\t4\t5+\tCompleteness\tContamination\tStrain heterogeneity\n/' > chkm_res/tree_qa+qa.tsv
+    
+    cp -r chkm_res !{params.out}
     """
 }
 
