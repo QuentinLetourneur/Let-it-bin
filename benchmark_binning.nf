@@ -64,9 +64,9 @@ params.contaminant = "" // prefix for the index of bowtie2 for contaminants
 params.bowt_index = "$baseDir/../../bowtie_ref"
 params.index_prefix = "" // prefix for the index of bowtie2 for analysed contigs
 params.bamDir = ""
-params.mappingDir = "${params.out}/mapping" // were mapping results will be stored
 params.binDir = "${params.out}/bins"
 params.skiptrim = "F"
+//~ params.mappingDir = "${params.out}/mapping" // were mapping results will be stored
 //~ params.chkmDir = "${params.out}/chkm_res"
 //~ params.vp1 = "$baseDir/databases/vp1_seq.fasta"
 //~ params.ncbi = "$baseDir/databases/ncbi_viruses.fna"
@@ -269,7 +269,7 @@ process cdhit {
 bowt_refDir = file(params.bowt_index)
 bowt_refDir.mkdirs()
 
-file(params.mappingDir).mkdirs()
+//file(params.mappingDir).mkdirs()
 
 if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_index}/${params.index_prefix}.1.bt2").exists() ) {
     
@@ -297,15 +297,15 @@ if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         file idx from indexChannel.first()
         
         output:
-        file("res_mapping/bam/*.bam") into bamChannel mode flatten
-        file("res_mapping/comptage/count_matrix.txt") into countChannel
+        file("mapping/bam/*.bam") into bamChannel mode flatten
+        file("mapping/comptage/count_matrix.txt") into countChannel
         
         shell:
         """
-        mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
-        cp -r res_mapping/* !{params.mappingDir}/
-        rm -r !{params.mappingDir}/sam
-        bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh !{params.mappingDir} !{params.mappingDir}/res_mapping.tsv
+        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
+        bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
+        rm -r mapping/sam
+        cp -r mapping/ !{params.out}/
         """
     }
     
@@ -336,15 +336,15 @@ else if (params.bamDir == "" && params.index_prefix != "") {
         file contig from cdhitChannel
         
         output:
-        file("res_mapping/bam/*.bam") into bamChannel mode flatten
-        file("res_mapping/comptage/count_matrix.txt") into countChannel
+        file("mapping/bam/*.bam") into bamChannel mode flatten
+        file("mapping/comptage/count_matrix.txt") into countChannel
         
         shell:
         """
-        mbma.py mapping -i !{cleanDir} -o res_mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
-        cp -r res_mapping/* !{params.mappingDir}/
-        rm -r !{params.mappingDir}/sam
-        bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh !{params.mappingDir} !{params.mappingDir}/res_mapping.tsv
+        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
+        bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
+        rm -r mapping/sam
+        cp -r mapping/ !{params.out}/
         """
     }
     
@@ -440,3 +440,13 @@ process annotaion {
     """
 }
 
+
+process dotplot {
+    
+    input:
+    file annot from annotChannel
+    
+    """
+    
+    """
+}
