@@ -442,11 +442,36 @@ process annotaion {
 
 
 process dotplot {
+    publishDir "${params.out}", mode: 'copy'
     
     input:
     file annot from annotChannel
     
-    """
+    output:
+    file ("*.png") into dpChannel
     
+    shell:
+    """
+    for line in `cat !{annot}`;do
+        
+        if [[ `echo $line | grep "s__"` != "" ]];then
+            sp=`echo $line | grep -oE "s__.+$" | cut -c 4-`
+            bin=`echo $line | grep -oE "bin\.[0-9]+"`
+            
+            if [ -f "/pasteur/homes/qletourn/fasta_genome_bact/*$sp*complete_genome" ]
+                
+                ref=`ls "/pasteur/homes/qletourn/fasta_genome_bact/*$sp*complete_genome*" | head -n 1`
+                
+                perl ../tools/abacas.1.3.1.pl -r ../fasta_genome_bact/ref -q !{params.binDir}/$bin.fa -p nucmer -d -m -i 50 -l 200 -c
+                
+                nucmer -mum *.fasta !{params.binDir}/$bin.fa
+                mummerplot -f -s large out.delta -p $bin_$sp -t png 2> /dev/null
+                sed -iE 's/set mouse.*$//g' $bin_$sp.gp
+                gnuplot $bin_$sp.gp
+            else
+                echo "the annotated species $sp is not part of the initial set"
+        fi
+    done
     """
 }
+
