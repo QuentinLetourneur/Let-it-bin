@@ -402,6 +402,7 @@ process binning {
     
     output:
     file("bin*") into binChannel
+    file("bin*") into binChannel_2
     
     shell:
     """
@@ -454,6 +455,123 @@ process dotplot {
     shell:
     """
     bash /pasteur/homes/qletourn/scripts/dotplot.sh !{annot} !{params.binDir}
+    """
+}
+
+process blast {
+    //publishDir "$myDir", mode: 'copy'
+    cpus params.cpus
+    memory "20G"
+
+    input:
+    file(fasta) from binChannel_2
+
+    output:
+    set file(fasta), file("*_nt.txt") into blastChannel //, file("*_catalogue.txt")
+    
+    script:
+    fasta_bn = fasta.baseName
+    """
+    #!/bin/bash
+    # NCBI
+    blastn -query ${fasta} -out ${fasta_bn}_nt.txt -outfmt \
+           "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
+           -db ${params.nt} \
+           -evalue ${params.evalue} -num_threads ${params.cpus}
+           # -max_target_seqs ${params.hit}
+    # rVDB
+    #blastn -query ${fasta} -out ${fasta_bn}_rvdb.txt -outfmt \
+           "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
+           -db ${params.rvdb} \
+           -evalue ${params.evalue} -num_threads ${params.cpus}
+    #cat ${sample_id}_rvdb.txt >> ${fasta_bn}_nt.txt
+    # Microbial catalogue
+    #blastn -query ${fasta} -out ${fasta_bn}_catalogue.txt -outfmt \
+           "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
+           -db ${params.catalogue}  \
+           -evalue ${params.evalue} -num_threads ${params.cpus}
+    """
+}
+
+
+process taxonomy {
+    publishDir "$myDir", mode: 'copy'
+    memory "20G"
+    
+    input:
+    file(fasta), file(nt) from blastChannel //, file(catalogue)   
+    
+    output:
+    file("*_krona.txt") into taxChannel
+    file("*_not_annotated.fasta") into notAnnotatedChannel
+    //file("log.txt") into logChannel
+    file("*_{taxonomy,annotation}.txt") into resChannel mode flatten
+    
+    script:
+    fasta_bn = fasta.baseName
+    """
+    #!/bin/bash
+    tax_count=`wc -l ${nt} | cut -f 1 -d " "`
+    if [ "\$tax_count" -gt "0" ]; then
+        # Annot ncbi
+        python ${fasta_bn}/../../scripts/get_taxonomy.py -i ${nt} -o ${fasta_bn}_taxonomy.txt\
+                -t ${params.gitaxidnucl} -n ${params.names} -d ${params.nodes}
+        python ${baseDir}/../../scripts/ExtractNCBIDB.py -f ${nt} -g ${fasta_bn}_taxonomy.txt\
+                -fc ${params.coverage} -o ${fasta_bn}_annotation.txt -nb 1
+        # Interest column for krona
+        cut -s -f 3-10 ${fasta_bn}_annotation.txt > ${fasta_bn}_annotation_interest.txt
+        # count number elements in annotated compared to the number of sequence
+        # to annot
+        #~catalogue_count=`wc -l ${catalogue} | cut -f 1 -d " "`
+        #echo "\$catalogue_count" > log.txt
+        #~count_reads=`grep "^>" -c ${fasta}`
+        
+        # Add Catalogue annotation
+        #~if [ "\$catalogue_count" -gt "0" ]; then
+            #~cut -f 1 -s ${fasta_bn}_annotation.txt > list_annotated
+            #~annot_nt=`wc -l list_annotated | cut -f 1 -d " "`
+            #count_reads=`grep "^>" -c !{fasta}`
+            #echo "\$count_reads" >> log.txt
+            #~if [ "\$count_reads" -gt "\$annot_nt" ]; then
+                # Get elements by catalogue and not annotated by ncbi
+                #TODO Need to get the best hit only
+                #~python ${baseDir}/../../scripts/extract_blast.py -i list_annotated \
+                    -b ${catalogue} -n -o ${fasta_bn}_catalogue_annotation.txt
+                # Get MGS annotation if they are annoted against mgs
+                #~python ${baseDir}/../../scripts/match_mgs.py \
+                    -i ${fasta_bn}_catalogue_annotation.txt -b ${params.mgs} \
+                    -o ${fasta_bn}_annotation_mgs.txt
+                #~cat ${fasta_bn}_annotation_mgs.txt >> ${fasta_bn}_annotation_interest.txt
+            #~fi
+        #~fi
+        # Get sequence not annotated
+        #if [ -f ${fasta_bn}_catalogue_annotation.txt ]; then
+            #~cat  ${fasta_bn}_annotation.txt ${fasta_bn}_catalogue_annotation.txt > annotated
+            #~python ${baseDir}/../../scripts/extract_fasta.py -q annotated -t ${fasta} -n \
+                -o ${fasta_bn}_not_annotated.fasta
+        #~else
+            #~python ${baseDir}/bin/extract_fasta.py -q ${fasta_bn}_annotation.txt \
+                -t ${fasta} -n -o ${fasta_bn}_not_annotated.fasta
+        #~fi
+        
+        # Create Krona annotation
+        while read line; do
+            echo -e "1\t\${line}"
+        done < ${fasta_bn}_annotation_interest.txt > ${fasta_bn}_krona.txt
+        annot=`wc -l ${sample_id}_krona.txt | cut -f 1 -d ' '`
+        #echo "\$count_reads" > log.txt
+        #echo "\$annot" >>log.txt
+        # Count not annoted elements
+        if [ "\$count_reads" -gt "\$annot" ]; then
+            val=\$(( count_reads - annot))
+        
+            echo -e "\$val\tNA\tNA\tNA\tNA\tNA\tNA\tNA" >> ${fasta_bn}_krona.txt
+        fi
+    else 
+        cat ${fasta} > ${fasta_bn}_not_annotated.fasta
+        touch ${fasta_bn}_krona.txt ${fasta_bn}_annotation.txt \
+            ${fasta_bn}_annotation.txt
+    fi
     """
 }
 
