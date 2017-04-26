@@ -43,7 +43,7 @@ if(params.help){
 }
 
 //baseDir = dossier ou se trouve le script nextflow
-params.in="$baseDir/../../simulated_data/Bacteria/"
+params.in="$baseDir/../../Simulated_data/Bacteria/"
 readChannel = Channel.fromFilePairs("${params.in}/*_R{1,2}.fastq")
                      .ifEmpty { exit 1, "Cannot find any reads matching: ${params.in}" }
                      //.subscribe { println it }
@@ -54,7 +54,6 @@ readChannel = Channel.fromFilePairs("${params.in}/*_R{1,2}.fastq")
 
 params.cpus = 6
 params.out = "$baseDir/../../binning_wf"
-params.coverage = 80
 params.mismatch = 1
 params.alienseq = "$baseDir/../../genomes_databases/alienTrimmerPF8contaminants.fasta"
 params.minlength = 45
@@ -66,18 +65,23 @@ params.index_prefix = "" // prefix for the index of bowtie2 for analysed contigs
 params.bamDir = ""
 params.binDir = "${params.out}/bins"
 params.skiptrim = "F"
+params.nt = "/pasteur/projets/policy01/Biomics/metagenomics/catalogue/nt"
+params.evalue = 10
+params.coverage = 80
+params.rvdb = "/pasteur/projets/policy01/Biomics/metagenomics/catalogue/rVDBv10.2.fasta"
+params.gitaxidnucl = "/local/databases/release/taxodb/gi_taxid_nucl.dmp"
+params.annotDir = "${params.out}/Annot"
+params.nodes = "/local/databases/release/taxodb/nodes.dmp"
+params.names = "/local/databases/release/taxodb/names.dmp"
+params.hit = 10
+params.catalogue = "/pasteur/projets/policy01/Biomics/metagenomics/catalogue/metabat_bin.fa"
 //~ params.mappingDir = "${params.out}/mapping" // were mapping results will be stored
 //~ params.chkmDir = "${params.out}/chkm_res"
 //~ params.vp1 = "$baseDir/databases/vp1_seq.fasta"
 //~ params.ncbi = "$baseDir/databases/ncbi_viruses.fna"
-//~ params.rvdb = "$baseDir/databases/rVDBv10.2.fasta"
 //~ params.uniprot = "$baseDir/databases/uniprot_taxonomy.fasta"
 //~ params.uniref = "$baseDir/databases/uniref_uniprot.fasta"
 //~ params.viral = "$baseDir/databases/viral_catalogue_poltson.fna"
-//~ params.nt = "/pasteur/projets/policy01/BioIT/amine/catalogue/nt"
-//~ params.gitaxidnucl = "/local/databases/release/taxodb/gi_taxid_nucl.dmp"
-//~ params.names = "/local/databases/release/taxodb/names.dmp"
-//~ params.nodes = "/local/databases/release/taxodb/nodes.dmp"
 
 
 myDir = file(params.out)
@@ -388,7 +392,6 @@ else if ( params.bamDir != "" ) {
 else {
     exit 1, "If no bam file path is specified you have to give a prefix name for the bowtie2 index files"
 }
-// maybe give choice to use jgi_summurized... or the count_matrix of mbma for the read count 
 
 file(params.binDir).mkdirs()
 
@@ -435,37 +438,41 @@ process annotaion {
     checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa chkm_res/lineage.ms !{params.binDir} chkm_res
     checkm qa -t !{params.cpus} -f chkm_res/qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm lineage.ms chkm_res
      
-    join -t $'\t' -1 1 -2 1 -o 1.1,1.4,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,2.10,2.11,2.12,2.13,2.14 <(tail -n +2 chkm_res/tree_qa.tsv | sort -k1,1) <(tail -n +2 chkm_res/qa_res.tsv | sort -k1,1) | sed '1s/^/Bin id\tTaxonomy\tMarker lineage\t# genomes\t# markers\tmarker sets\t0\t1\t2\t3\t4\t5+\tCompleteness\tContamination\tStrain heterogeneity\n/' > chkm_res/tree_qa+qa.tsv
+    join -t \$'\t' -1 1 -2 1 -o 1.1,1.4,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,2.10,2.11,2.12,2.13,2.14 <(tail -n +2 chkm_res/tree_qa.tsv | sort -k1,1) <(tail -n +2 chkm_res/qa_res.tsv | sort -k1,1) | sed '1s/^/Bin id\tTaxonomy\tMarker lineage\t# genomes\t# markers\tmarker sets\t0\t1\t2\t3\t4\t5+\tCompleteness\tContamination\tStrain heterogeneity\n/' > chkm_res/tree_qa+qa.tsv
     
     cp -r chkm_res !{params.out}
     """
 }
 
-annotChannel = Channel.fromPath("/pasteur/homes/qletourn/binning_wf/Bacteria_V3/chkm_res/tree_qa.tsv")
+//~ annotChannel = Channel.fromPath("/pasteur/homes/qletourn/binning_wf/Bacteria_V3/chkm_res/tree_qa.tsv")
 
-process dotplot {
-    publishDir "${params.out}", mode: 'copy'
+//~ process dotplot {
+    //~ publishDir "${params.out}", mode: 'copy'
     
-    input:
-    file annot from annotChannel
+    //~ input:
+    //~ file annot from annotChannel
     
-    output:
-    file ("*.png") into dpChannel
+    //~ output:
+    //~ file ("*.png") into dpChannel
     
-    shell:
-    """
-    bash /pasteur/homes/qletourn/scripts/dotplot.sh !{annot} !{params.binDir}
-    """
-}
+    //~ shell:
+    //~ """
+    //~ bash /pasteur/homes/qletourn/scripts/dotplot.sh !{annot} !{params.binDir}
+    //~ """
+//~ }
+
+binChannel_2 = Channel.fromPath("${baseDir}/../../binning_wf/Bacteria_V3/bins/bin.*.fa")
+
+file(params.annotDir).mkdirs()
 
 process blast {
-    //publishDir "$myDir", mode: 'copy'
+    publishDir "$params.annotDir", mode: 'copy'
     cpus params.cpus
     memory "20G"
-
+    
     input:
     file(fasta) from binChannel_2
-
+    
     output:
     set file(fasta), file("*_nt.txt") into blastChannel //, file("*_catalogue.txt")
     
@@ -473,18 +480,24 @@ process blast {
     fasta_bn = fasta.baseName
     """
     #!/bin/bash
-    # NCBI
+    # local DB
     blastn -query ${fasta} -out ${fasta_bn}_nt.txt -outfmt \
            "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
+           -db /pasteur/homes/qletourn/Blastdb/Bact_Anita \
+           -evalue ${params.evalue} -num_threads ${params.cpus} \
+           -max_target_seqs ${params.hit}
+    # NCBI
+    #blastn -query ${fasta} -out ${fasta_bn}_nt.txt -outfmt \
+           "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
            -db ${params.nt} \
-           -evalue ${params.evalue} -num_threads ${params.cpus}
-           # -max_target_seqs ${params.hit}
+           -evalue ${params.evalue} -num_threads ${params.cpus} \
+           -max_target_seqs ${params.hit}
     # rVDB
     #blastn -query ${fasta} -out ${fasta_bn}_rvdb.txt -outfmt \
            "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
            -db ${params.rvdb} \
            -evalue ${params.evalue} -num_threads ${params.cpus}
-    #cat ${sample_id}_rvdb.txt >> ${fasta_bn}_nt.txt
+    #cat ${fasta_bn}_rvdb.txt >> ${fasta_bn}_nt.txt
     # Microbial catalogue
     #blastn -query ${fasta} -out ${fasta_bn}_catalogue.txt -outfmt \
            "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
@@ -493,13 +506,19 @@ process blast {
     """
 }
 
+//~ blastChannel = Channel.fromPath("${baseDir}/../../binning_wf/Bacteria_V3/Annot/bin.*_nt.txt")
+//~ binChannel_2 = Channel.fromPath("${baseDir}/../../binning_wf/Bacteria_V3/bins/bin.*.fa")
 
 process taxonomy {
-    publishDir "$myDir", mode: 'copy'
+    publishDir "$params.annotDir", mode: 'copy'
     memory "20G"
     
+    //echo true
+    
     input:
-    file(fasta), file(nt) from blastChannel //, file(catalogue)   
+    set file(fasta), file(nt) from blastChannel //, file(catalogue)   
+    //~ file(nt) from blastChannel //, file(catalogue)   
+    //~ file(fasta) from binChannel_2
     
     output:
     file("*_krona.txt") into taxChannel
@@ -514,51 +533,33 @@ process taxonomy {
     tax_count=`wc -l ${nt} | cut -f 1 -d " "`
     if [ "\$tax_count" -gt "0" ]; then
         # Annot ncbi
-        python ${fasta_bn}/../../scripts/get_taxonomy.py -i ${nt} -o ${fasta_bn}_taxonomy.txt\
-                -t ${params.gitaxidnucl} -n ${params.names} -d ${params.nodes}
-        python ${baseDir}/../../scripts/ExtractNCBIDB.py -f ${nt} -g ${fasta_bn}_taxonomy.txt\
-                -fc ${params.coverage} -o ${fasta_bn}_annotation.txt -nb 1
+        python ${baseDir}/../../scripts/get_taxonomy.py -i ${nt} \
+                -o ${fasta_bn}_taxonomy.txt -t ${params.gitaxidnucl} \
+                -n ${params.names} -d ${params.nodes}
+        python ${baseDir}/../../scripts/ExtractNCBIDB.py \
+                -f ${nt} -g ${fasta_bn}_taxonomy.txt -fc ${params.coverage} \
+                -o ${fasta_bn}_annotation.txt -nb 1
         # Interest column for krona
         cut -s -f 3-10 ${fasta_bn}_annotation.txt > ${fasta_bn}_annotation_interest.txt
-        # count number elements in annotated compared to the number of sequence
-        # to annot
-        #~catalogue_count=`wc -l ${catalogue} | cut -f 1 -d " "`
-        #echo "\$catalogue_count" > log.txt
-        #~count_reads=`grep "^>" -c ${fasta}`
         
-        # Add Catalogue annotation
-        #~if [ "\$catalogue_count" -gt "0" ]; then
-            #~cut -f 1 -s ${fasta_bn}_annotation.txt > list_annotated
-            #~annot_nt=`wc -l list_annotated | cut -f 1 -d " "`
-            #count_reads=`grep "^>" -c !{fasta}`
-            #echo "\$count_reads" >> log.txt
-            #~if [ "\$count_reads" -gt "\$annot_nt" ]; then
-                # Get elements by catalogue and not annotated by ncbi
-                #TODO Need to get the best hit only
-                #~python ${baseDir}/../../scripts/extract_blast.py -i list_annotated \
-                    -b ${catalogue} -n -o ${fasta_bn}_catalogue_annotation.txt
-                # Get MGS annotation if they are annoted against mgs
-                #~python ${baseDir}/../../scripts/match_mgs.py \
-                    -i ${fasta_bn}_catalogue_annotation.txt -b ${params.mgs} \
-                    -o ${fasta_bn}_annotation_mgs.txt
-                #~cat ${fasta_bn}_annotation_mgs.txt >> ${fasta_bn}_annotation_interest.txt
-            #~fi
-        #~fi
         # Get sequence not annotated
-        #if [ -f ${fasta_bn}_catalogue_annotation.txt ]; then
-            #~cat  ${fasta_bn}_annotation.txt ${fasta_bn}_catalogue_annotation.txt > annotated
-            #~python ${baseDir}/../../scripts/extract_fasta.py -q annotated -t ${fasta} -n \
-                -o ${fasta_bn}_not_annotated.fasta
-        #~else
-            #~python ${baseDir}/bin/extract_fasta.py -q ${fasta_bn}_annotation.txt \
+        if [ -f ${fasta_bn}_catalogue_annotation.txt ]; then
+            cat  ${fasta_bn}_annotation.txt ${fasta_bn}_catalogue_annotation.txt\
+             > annotated
+            python ${baseDir}/../../scripts/extract_fasta.py -q annotated \
                 -t ${fasta} -n -o ${fasta_bn}_not_annotated.fasta
-        #~fi
+        else
+            python ${baseDir}/../../scripts/extract_fasta.py \
+                -q ${fasta_bn}_annotation.txt -t ${fasta} -n \
+                -o ${fasta_bn}_not_annotated.fasta
+        fi
+        
         
         # Create Krona annotation
         while read line; do
             echo -e "1\t\${line}"
         done < ${fasta_bn}_annotation_interest.txt > ${fasta_bn}_krona.txt
-        annot=`wc -l ${sample_id}_krona.txt | cut -f 1 -d ' '`
+        annot=`wc -l ${fasta_bn}_krona.txt | cut -f 1 -d ' '`
         #echo "\$count_reads" > log.txt
         #echo "\$annot" >>log.txt
         # Count not annoted elements
@@ -575,3 +576,28 @@ process taxonomy {
     """
 }
 
+//~ # count number elements in annotated compared to the number of sequence
+        //~ # to annot
+        //~ #~catalogue_count=`wc -l ${catalogue} | cut -f 1 -d " "`
+        //~ #echo "\$catalogue_count" > log.txt
+        //~ #~count_reads=`grep "^>" -c ${fasta}`
+        
+        //~ # Add Catalogue annotation
+        //~ #~if [ "\$catalogue_count" -gt "0" ]; then
+            //~ #~cut -f 1 -s ${fasta_bn}_annotation.txt > list_annotated
+            //~ #~annot_nt=`wc -l list_annotated | cut -f 1 -d " "`
+            //~ #count_reads=`grep "^>" -c !{fasta}`
+            //~ #echo "\$count_reads" >> log.txt
+            //~ #~if [ "\$count_reads" -gt "\$annot_nt" ]; then
+                //~ # Get elements by catalogue and not annotated by ncbi
+                //~ #TODO Need to get the best hit only
+                //~ #~python ${baseDir}/../../scripts/extract_blast.py -i list_annotated \
+                    //~ -b ${catalogue} -n -o ${fasta_bn}_catalogue_annotation.txt
+                //~ # Get MGS annotation if they are annoted against mgs
+                //~ #~python ${baseDir}/../../scripts/match_mgs.py \
+                    //~ -i ${fasta_bn}_catalogue_annotation.txt -b ${params.mgs} \
+                    //~ -o ${fasta_bn}_annotation_mgs.txt
+                //~ #~cat ${fasta_bn}_annotation_mgs.txt >> ${fasta_bn}_annotation_interest.txt
+            //~ #~fi
+        //~ #~fi
+        
