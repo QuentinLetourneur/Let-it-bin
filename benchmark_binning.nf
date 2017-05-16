@@ -31,7 +31,7 @@ workflow.onError {
 }
 
 params.help=false
-// a completer
+// to be completed
 def usage() {
     println("benchmark_binning.nf --in <contigs_dir> --out <output_dir> --cpus <nb_cpus>")
 }
@@ -42,7 +42,7 @@ if(params.help){
     exit(1)
 }
 
-//baseDir = dossier ou se trouve le script nextflow
+//baseDir = folder where is located the nextflow script
 params.in="$baseDir/../../Simulated_data/Bacteria/"
 readChannel = Channel.fromFilePairs("${params.in}/*_R{1,2}.fastq")
                      .ifEmpty { exit 1, "Cannot find any reads matching: ${params.in}" }
@@ -52,8 +52,9 @@ readChannel = Channel.fromFilePairs("${params.in}/*_R{1,2}.fastq")
                 .fromPath("${params.in}/*.fasta")
                 .map {file -> tuple(file.baseName.replaceAll(".fasta",""),file)}*/
 
-params.cpus = 6
+params.cpus = 4
 params.out = "$baseDir/../../binning_wf"
+params.coverage = 80
 params.mismatch = 1
 params.alienseq = "$baseDir/../../genomes_databases/alienTrimmerPF8contaminants.fasta"
 params.minlength = 45
@@ -63,22 +64,49 @@ params.contaminant = "" // prefix for the index of bowtie2 for contaminants
 params.bowt_index = "$baseDir/../../bowtie_ref"
 params.index_prefix = "" // prefix for the index of bowtie2 for analysed contigs
 params.bamDir = ""
-params.binDir = "${params.out}/bins"
+params.mappingDir = "${params.out}/mapping" // were mapping results will be stored
+params.metabatDir = "${params.out}/Metabat"
 params.skiptrim = "F"
-params.nt = "/pasteur/projets/policy01/Biomics/metagenomics/catalogue/nt"
+params.nt = "/pasteur/projets/policy01/BioIT/amine/catalogue/nt"
 params.evalue = 10
-params.coverage = 80
 params.rvdb = "/pasteur/projets/policy01/Biomics/metagenomics/catalogue/rVDBv10.2.fasta"
 params.gitaxidnucl = "/local/databases/release/taxodb/gi_taxid_nucl.dmp"
 params.annotDir = "${params.out}/Annot"
-params.nodes = "/local/databases/release/taxodb/nodes.dmp"
 params.names = "/local/databases/release/taxodb/names.dmp"
+params.nodes = "/local/databases/release/taxodb/nodes.dmp"
 params.hit = 10
 params.catalogue = "/pasteur/projets/policy01/Biomics/metagenomics/catalogue/metabat_bin.fa"
-//~ params.mappingDir = "${params.out}/mapping" // were mapping results will be stored
+params.nb_cluster = ""
+params.metabat = " "
+params.concoct = " "
+params.cocacola = " "
+params.mycc = " "
+params.groopm = " "
+params.maxbin = " "
+params.metacluster5 = " "
+params.mbbc = " "
+params.canopy = " "
+params.abundancebin = " "
+params.scimm = " "
+params.all = "F"
+params.concoctDir = "${params.out}/Concoct"
+params.cocacolaDir = "${params.out}/Cocacola"
+params.myccDir = "${params.out}/MyCC"
+params.groopmDir = "${params.out}/GroopM"
+params.maxbinDir = "${params.out}/MaxBin"
+params.metacluster5Dir "${params.out}/Metacluster5"
+params.mbbcDir = "${params.out}/MBBC"
+params.canopyDir = "${params.out}/Canopy"
+params.abundancebinDir = "${params.out}/AbundanceBin"
+params.scimmDir = "${params.out}/SCIMM"
+params.multi_assembly = "false"
+params.contigs = ""
+params.count_matrix = ""
+params.scripts = "/pasteur/homes/qletourn/scripts"
 //~ params.chkmDir = "${params.out}/chkm_res"
 //~ params.vp1 = "$baseDir/databases/vp1_seq.fasta"
 //~ params.ncbi = "$baseDir/databases/ncbi_viruses.fna"
+//~ params.rvdb = "$baseDir/databases/rVDBv10.2.fasta"
 //~ params.uniprot = "$baseDir/databases/uniprot_taxonomy.fasta"
 //~ params.uniref = "$baseDir/databases/uniref_uniprot.fasta"
 //~ params.viral = "$baseDir/databases/viral_catalogue_poltson.fna"
@@ -90,7 +118,7 @@ myDir.mkdirs()
 cleanDir = file("${params.cleaned_reads}")
 cleanDir.mkdirs()
 
-if(params.contaminant != "") {
+if( params.contaminant != "" ) {
     process filtering {
         //publishDir "$myDir", mode: 'copy'
         cpus params.cpus
@@ -107,8 +135,8 @@ if(params.contaminant != "") {
         bowtie2 -q -N !{params.mismatch} -1 !{reads[0]} -2 !{reads[1]} -x ${params.contaminant} --un-conc unmapped/ -S /dev/null -p !{params.cpus}
         """
     }
-
-
+    
+    
     process trimming {
         //publishDir "$cleanDir", mode: 'copy'
         cpus params.cpus
@@ -119,6 +147,7 @@ if(params.contaminant != "") {
         output:
         set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
         file("*.fastq") into mappingChannel mode flatten
+        file("*.fastq") into metaclustinputChannel mode flatten
         
         script:
         """
@@ -129,27 +158,27 @@ if(params.contaminant != "") {
     }
     mappingChannel.subscribe { it.copyTo(cleanDir) }
     
-    process khmer {
-        cpus params.cpus
-        memory "50000"
+    //~ process khmer {
+        //~ cpus params.cpus
+        //~ memory "50000"
         
-        input:
-        set pair_id, file(forward), file(reverse) from trimChannel
+        //~ input:
+        //~ set pair_id, file(forward), file(reverse) from trimChannel
         
-        output:
-        set pair_id, file("*_1.fastq"), file("*_2.fastq") into assemblyChannel
+        //~ output:
+        //~ set pair_id, file("*_1.fastq"), file("*_2.fastq") into khmerChannel
         
-        script:
-        """
-        interleave-reads.py ${forward} ${reverse} --output interleaved.pe
-        normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-        filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-        extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-        split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-        """
-    }
+        //~ script:
+        //~ """
+        //~ interleave-reads.py ${forward} ${reverse} --output interleaved.pe
+        //~ normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct interleaved.pe --output output.pe.keep
+        //~ filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+        //~ extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+        //~ split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+        //~ """
+    //~ }
 }
-else if (params.skiptrim == "F") {
+else if( params.skiptrim == "F" ) {
     process trimming {
         //publishDir "$myDir", mode: 'copy'
         
@@ -159,6 +188,7 @@ else if (params.skiptrim == "F") {
         output:
         set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
         file("*.fastq") into mappingChannel mode flatten
+        file("*.fastq") into metaclustinputChannel mode flatten
         
         script:
         """
@@ -168,121 +198,213 @@ else if (params.skiptrim == "F") {
         """
     }
     mappingChannel.subscribe { it.copyTo(cleanDir) }
-    
-    process khmer {
-        cpus params.cpus
-        memory "50000"
+    // modif process khmer pr chaque condition
+    //~ process khmer {
+        //~ cpus params.cpus
+        //~ memory "100000"
+        
+        //~ input:
+        //~ set pair_id, file(forward), file(reverse) from trimChannel
+        
+        //~ output:
+        //~ set pair_id, file("*_1.fastq"), file("*_2.fastq") into khmerChannel
+        
+        //~ script:
+        //~ """
+        //~ interleave-reads.py ${forward} ${reverse} --output interleaved.pe
+        //~ normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct interleaved.pe --output output.pe.keep
+        //~ filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+        //~ extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+        //~ split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+        //~ """
+    //~ }
+}
+else if( params.contigs == "" && params.multi_assembly == "false" ) {
+    mergeChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"}
+    metaclustinputChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"}
+    // modify so that there is on script to merge apply on the list of R1 files then on the R2
+    // To render it usable independently of the number of samples
+    // Add this box before each khmer process !
+    process merge {
         
         input:
-        set pair_id, file(forward), file(reverse) from trimChannel
+        set fA, fB, fC, fD, fE, fF, fG from mergeChannel.toList()
         
         output:
-        set pair_id, file("*_1.fastq"), file("*_2.fastq") into assemblyChannel
+        set val("mergefstq"), file("*_1.fastq"), file("*_2.fastq") into trimChannel
+        
+        shell:
+        """
+        bash !{params.scripts}/merge_fastq.sh !{fA[1][0]} !{fA[1][1]} !{fB[1][0]} !{fB[1][1]} !{fC[1][0]} !{fC[1][1]} !{fD[1][0]} !{fD[1][1]} !{fE[1][0]} !{fE[1][1]} !{fF[1][0]} !{fF[1][1]} !{fG[1][0]} !{fG[1][1]}
+        """
+    }
+}
+
+if( params.contigs == "" ) {
+    process khmer {
+        cpus params.cpus
+        memory "100000"
+        clusterOptions='--qos=normal'
+        
+        input:
+        set pair_id, file(fw), file(rv) from trimChannel
+        
+        output:
+        set pair_id, file("*t_1.fastq"), file("*t_2.fastq") into khmerChannel
+        file("output.dn.pe") into conv_fastqChannel
         
         script:
         """
-        interleave-reads.py ${forward} ${reverse} --output interleaved.pe
+        interleave-reads.py ${fw} ${rv} --output interleaved.pe
         normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
         filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
         extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
         split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+        """
+    }
+}
+
+if( params.contigs == "" && params.multi_assembly == "false" ) {
+    process assembly {
+        // permet de copier dans myDir les fichiers de l'output
+        publishDir "$myDir", mode: 'copy'
+        
+        cpus params.cpus
+        if(params.mode == "clc"){
+            clusterOptions='--qos=fast -C clcbio' 
+        }
+        input:
+        set pair_id, file(forward), file(reverse) from khmerChannel
+        
+        output:
+        file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel
+        file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel_2
+        file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel_3
+        file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel_4
+        file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel_5
+        file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel_6
+        file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel_7
+        file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel_8
+        file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel_9
+        
+        shell:
+        """
+        #!/bin/bash
+        mkdir assembly
+        if [ !{params.mode} == "spades" ];then
+            spades.py --meta -1 !{forward} -2 !{reverse} -t !{params.cpus} -o assembly/
+            mv assembly/scaffolds.fasta assembly/!{pair_id}_spades.fasta
+        elif [ !{params.mode} ==  "clc" ];then
+            clc_assembler -o assembly/contigs.fasta -p fb ss 180 250 -q -i !{forward} !{reverse} --cpus !{params.cpus}
+            mv assembly/contigs.fasta assembly/!{pair_id}_clc.fasta
+        else
+            #interleave-reads.py !{forward} !{reverse} --output assembly/!{pair_id}.pe
+            #minia -in assembly/!{pair_id}.pe -out assembly/!{pair_id} -nb-cores !{params.cpus}
+            !{baseDir}/gatb-minia-pipeline/gatb -1 !{forward} -2 !{reverse} -o assembly/!{pair_id}_gatb
+            #mv  assembly/!{pair_id}.contigs.fa assembly/!{pair_id}_minia.fasta
+        fi
+        """
+    }
+}
+else if( params.contigs == "" && params.multi_assembly == "true" ) {
+    
+    process assembly {
+        // permet de copier dans myDir les fichiers de l'output
+        publishDir "$myDir", mode: 'copy'
+        
+        cpus params.cpus
+        if(params.mode == "clc"){
+            clusterOptions='--qos=fast -C clcbio' 
+        }
+        input:
+        set pair_id, file(forward), file(reverse) from khmerChannel
+        
+        output:
+        file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel
+        //file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel_2
+        
+        shell:
+        """
+        mkdir assembly
+        if [ !{params.mode} == "spades" ]
+        then
+            spades.py --meta -1 !{forward} -2 !{reverse} -t !{params.cpus} -o assembly/
+            mv assembly/scaffolds.fasta assembly/!{pair_id}_spades.fasta
+        elif [ !{params.mode} ==  "clc" ]
+        then
+            clc_assembler -o assembly/contigs.fasta -p fb ss 180 250 -q -i !{forward} !{reverse} --cpus !{params.cpus}
+            mv assembly/contigs.fasta assembly/!{pair_id}_clc.fasta
+        else
+            #interleave-reads.py !{forward} !{reverse} --output assembly/!{pair_id}.pe
+            #minia -in assembly/!{pair_id}.pe -out assembly/!{pair_id} -nb-cores !{params.cpus}
+            !{baseDir}/gatb-minia-pipeline/gatb -1 !{forward} -2 !{reverse} -o assembly/!{pair_id}_gatb
+            #mv  assembly/!{pair_id}.contigs.fa assembly/!{pair_id}_minia.fasta
+        fi
+        """
+    }
+    
+    
+    process cdhit {
+        publishDir "${myDir}/assembly", mode: 'copy'
+        cpus params.cpus
+        clusterOptions='--qos=normal'
+        
+        input:
+        file contigs from contigsChannel.toList()
+        
+        output:
+        file("cata_contig_nr.fasta") into assemblyChannel
+        file("cata_contig_nr.fasta") into assemblyChannel_2
+        file("cata_contig_nr.fasta") into assemblyChannel_3
+        file("cata_contig_nr.fasta") into assemblyChannel_4
+        file("cata_contig_nr.fasta") into assemblyChannel_5
+        file("cata_contig_nr.fasta") into assemblyChannel_6
+        file("cata_contig_nr.fasta") into assemblyChannel_7
+        file("cata_contig_nr.fasta") into assemblyChannel_8
+        file("cata_contig_nr.fasta") into assemblyChannel_9
+        
+        shell:
+        """
+        bash !{params.scripts}/merge_fasta.sh !{contigs}
+        cd-hit-est -i cata_contigs.fasta -o cata_contig_nr.fasta -c 0.95 -T !{params.cpus} -aS 0.9 -d 0 -g 1 -M 0
         """
     }
 }
 else {
-    trimChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"}
-    
-    process khmer {
-        cpus params.cpus
-        memory "50000"
-        
-        input:
-        set pair_id, file(read) from trimChannel
-        
-        output:
-        set pair_id, file("*_1.fastq"), file("*_2.fastq") into assemblyChannel
-        
-        script:
-        """
-        interleave-reads.py ${read[0]} ${read[1]} --output interleaved.pe
-        normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-        filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-        extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-        split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-        """
-    }
+    assemblyChannel = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_2 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_3 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_4 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_5 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_6 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_7 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_8 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_9 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
 }
 
-
-process assembly {
-    // permet de copier dans myDir les fichiers de l'output
-    publishDir "$myDir", mode: 'copy'
-    
-    cpus params.cpus
-    if(params.mode == "clc"){
-        clusterOptions='--qos=fast -C clcbio' 
-    }
-    input:
-    set pair_id, file(forward), file(reverse) from assemblyChannel
-    
-    output:
-    file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel
-    //file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel_2
-    
-    shell:
-    """
-    #!/bin/bash
-    mkdir assembly
-    if [ !{params.mode} == "spades" ]
-    then
-        spades.py --meta -1 !{forward} -2 !{reverse} -t !{params.cpus} -o assembly/
-        mv assembly/scaffolds.fasta assembly/!{pair_id}_spades.fasta
-    elif [ !{params.mode} ==  "clc" ]
-    then
-        clc_assembler -o assembly/contigs.fasta -p fb ss 180 250 -q -i !{forward} !{reverse} --cpus !{params.cpus}
-        mv assembly/contigs.fasta assembly/!{pair_id}_clc.fasta
-    else
-        #interleave-reads.py !{forward} !{reverse} --output assembly/!{pair_id}.pe
-        #minia -in assembly/!{pair_id}.pe -out assembly/!{pair_id} -nb-cores !{params.cpus}
-        !{baseDir}/gatb-minia-pipeline/gatb -1 !{forward} -2 !{reverse} -o assembly/!{pair_id}_gatb
-        #mv  assembly/!{pair_id}.contigs.fa assembly/!{pair_id}_minia.fasta
-    fi
-    """
-}
-
-
-process cdhit {
-    publishDir "${myDir}/assembly", mode: 'copy'
-    cpus params.cpus
-    clusterOptions='--qos=normal'
-    
-    input:
-    file contigs from contigsChannel.toList()
-    
-    output:
-    file("cata_contig_nr.fasta") into cdhitChannel
-    file("cata_contig_nr.fasta") into cdhitChannel_2
-    
-    shell:
-    """
-    bash /pasteur/homes/qletourn/scripts/merge_fasta.sh !{contigs}
-    cd-hit-est -i cata_contigs.fasta -o cata_contig_nr.fasta -c 0.95 -T !{params.cpus} -aS 0.9 -d 0 -g 1 -M 0
-    """
-}
 
 bowt_refDir = file(params.bowt_index)
 bowt_refDir.mkdirs()
 
 //file(params.mappingDir).mkdirs()
 
-if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_index}/${params.index_prefix}.1.bt2").exists() ) {
+if( params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_index}/${params.index_prefix}.1.bt2").exists() ) {
     
     process index {
         publishDir "$bowt_refDir", mode: 'copy'
         cpus params.cpus
         
         input:
-        file assembly from cdhitChannel
+        file assembly from assemblyChannel
         
         output:
         file("*.bt2") into indexChannel
@@ -307,7 +429,7 @@ if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         shell:
         """
         mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
-        bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
+        bash !{params.scripts}/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
         rm -r mapping/sam
         cp -r mapping/ !{params.out}/
         """
@@ -323,6 +445,9 @@ if (params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         
         output:
         file("*.sorted") into sortedChannel
+        file("*.sorted") into sortedChannel_2
+        file("*.sorted") into sortedChannel_3
+        file("*.sorted") into sortedChannel_4
         
         shell:
         """
@@ -337,7 +462,7 @@ else if (params.bamDir == "" && params.index_prefix != "") {
         //cpus params.cpus
         
         input:
-        file contig from cdhitChannel
+        file assembly from assemblyChannel
         
         output:
         file("mapping/bam/*.bam") into bamChannel mode flatten
@@ -346,7 +471,7 @@ else if (params.bamDir == "" && params.index_prefix != "") {
         shell:
         """
         mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
-        bash /pasteur/homes/qletourn/scripts/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
+        bash !{params.scripts}/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
         rm -r mapping/sam
         cp -r mapping/ !{params.out}/
         """
@@ -362,6 +487,9 @@ else if (params.bamDir == "" && params.index_prefix != "") {
         
         output:
         file("*.sorted") into sortedChannel
+        file("*.sorted") into sortedChannel_2
+        file("*.sorted") into sortedChannel_3
+        file("*.sorted") into sortedChannel_4
         
         shell:
         """
@@ -369,9 +497,9 @@ else if (params.bamDir == "" && params.index_prefix != "") {
         """
     }
 }
-else if ( params.bamDir != "" ) {
+else if ( params.bamDir != "" && params.count_matrix != "" ) {
     
-    bamChannel = Channel.fromPath("${params.bamDir}/*.bam")
+    bamChannel = Channel.fromPath("${params.bamDir}/*.bam").ifEmpty { exit 1, "Cannot find any bams in the directory : ${params.in}" }
     
     process sort_bam {
         
@@ -382,6 +510,9 @@ else if ( params.bamDir != "" ) {
         
         output:
         file("*.sorted") into sortedChannel
+        file("*.sorted") into sortedChannel_2
+        file("*.sorted") into sortedChannel_3
+        file("*.sorted") into sortedChannel_4
         
         shell:
         """
@@ -390,61 +521,346 @@ else if ( params.bamDir != "" ) {
     }
 }
 else {
-    exit 1, "If no bam file path is specified you have to give a prefix name for the bowtie2 index files"
+    exit 1, "If no prefix for bowtie index is given you have to give the path to the bams directory and the count_matrix.txt file"
 }
 
-file(params.binDir).mkdirs()
+if ( params.concoct != " " || params.cocacola != " " || params.groopm != " " ||  params.all == "T" ) {
+    
+    process index_bam {
+        
+        //~ cpus params.cpus
+        
+        input:
+        file sort_bam from sortedChannel_2
+        
+        output:
+        file("*.bai") into indexedChannel
+        file("*.bai") into indexedChannel_2
+        
+        shell:
+        """
+        samtools index !{sort_bam} !{sort_bam}.bai
+        """
+    }
+    
+    process abun_and_link_profile {
+    
+        //~ cpus params.cpus
+        
+        input:
+        file bam_sorted from sortedChannel_3.toList()
+        file bam_idx from indexedChannel.toList()
+        file assembly from assemblyChannel_2
+        
+        output:
+        file("covTable.tsv") into abundanceProfileChannel
+        file("covTable.tsv") into abundanceProfileChannel_2
+        file("covTable.tsv") into abundanceProfileChannel_3
+        file("linkTable.tsv") into linkageChannel
+        file("linkTable.tsv") into linkageChannel_2
+        
+        shell:
+        """
+        python /pasteur/homes/qletourn/tools/CONCOCT-0.4.0/scripts/gen_input_table.py !{assembly} !{bam_sorted} > covTable.tsv
+        python /pasteur/homes/qletourn/tools/CONCOCT-0.4.0/scripts/bam_to_linkage.py -m !{params.cpus} --regionlength 500 --fullsearch !{assembly} !{bam_sorted} > linkTable.tsv
+        """
+    }
+}
 
-process binning {
-    publishDir "${params.binDir}", mode: 'copy'
-    cpus params.cpus
+//~ process fastq_to_fasta {
     
-    input:
-    file assembly from cdhitChannel_2
-    file bams from sortedChannel.toList()
+    //~ input:
+    //~ file fastq 
     
-    output:
-    file("bin*") into binChannel
-    file("bin*") into binChannel_2
+//~ }
+
+if( params.metabat != " " || params.mycc != " " || params.all == "T" ) {
     
-    shell:
-    """
-    /pasteur/homes/qletourn/tools/metabat/jgi_summarize_bam_contig_depths --outputDepth depth.txt !{bams}
-    /pasteur/homes/qletourn/tools/metabat/metabat -i !{assembly} -a depth.txt -o bin -t !{params.cpus} --minSamples 5
-    """
+    process jgi_summa_depths {
+        
+        input:
+        file bams from sortedChannel.toList()
+        
+        output:
+        file("depth.txt") into abunChannel
+        file("depth.txt") into abunChannel_2
+        
+        shell:
+        """
+        /pasteur/homes/qletourn/tools/metabat/jgi_summarize_bam_contig_depths --outputDepth depth.txt !{bams}
+        """
+    }
+}
+
+//~ if( params.scimm != " " || params.all == "T" ) {
+    //~ file(params.scimmDir).mkdirs()
+    
+        //~ process SCIMM {
+        
+        //~ input:
+        
+        //~ output:
+        
+        //~ shell:
+        //~ """
+        
+        //~ """
+    //~ }
+//~ }
+
+//~ if( params.abundancebin != " " || params.all == "T" ) {
+    //~ file(params.abundancebinDir).mkdirs()
+    
+        //~ process AbundanceBin {
+        
+        //~ input:
+        
+        //~ output:
+        
+        //~ shell:
+        //~ """
+        
+        //~ """
+    //~ }
+//~ }
+
+if( params.canopy != " " || params.all == "T" ) {
+    file(params.canopyDir).mkdirs()
+    
+        process Canopy {
+        cpus params.cpus
+        memory "100G"
+        
+        input:
+        file count_mat from countChannel
+        
+        output:
+        output file("*") into canopyChannel
+        
+        shell:
+        """
+        sed -r "s/(\t[0-9]+)\.[0-9]+/\1/g" !{count_mat} > tmp.txt
+        tail -n +2 tmp.txt | cut -f 1,3- -d $'\t' > count_matrix.tsv
+        cc.bin -n !{params.cpus} -i count_matrix.tsv -o bin -c //...
+        //...
+        """
+    }
+}
+
+//~ if( params.mbbc != " " || params.all == "T" ) {
+    //~ file(params.mbbcDir).mkdirs()
+    
+        //~ process MBBC {
+        //~ memory "60000"
+        
+        //~ input:
+        
+        
+        //~ output:
+        
+        
+        //~ shell:
+        //~ """
+        //~ java -jar -Xmx50g -i 
+        //~ """
+    //~ }
+//~ }
+
+if( params.metacluster5 != " " || params.all == "T" ) {
+    file(params.metacluster5Dir).mkdirs()
+    
+    process Metacluster5 {
+        
+        input:
+        file assembly from assemblyChannel_9
+        file reads from metaclustinputChannel.toList()
+        
+        output:
+        file("*") into metacluster5Channel
+        
+        shell:
+        """
+        Metacluster5_1 !{assembly} !{reads} 
+        Metacluster5_2 !{assembly} !{reads}
+        """
+    }
+}
+
+if( params.maxbin != " " || params.all == "T" ) {
+    file(params.maxbinDir).mkdirs()
+    
+    process maxbin {
+        cpus params.cpus
+        
+        input:
+        file assembly from assemblyChannel_8
+        file abun from abundanceProfileChannel_3
+        
+        output:
+        file("bin*") into maxbinChannel
+        
+        shell:
+        """
+        nb_col=`awk '{print NF; exit}' !{abun}`
+        bash !{params.scripts}/split_abun_file.sh !{abun} \$nb_col
+        ls cov_mean* > list_abun_files.txt
+        perl run_MaxBin.pl -contigs !{assembly} -out bin -abund_list list_abun_files.txt -thread !{params.cpus}
+        for file in `ls bin.0*`;do
+            basename=`cut -f 1,2 -d "." $file`
+            mv $file $basename.fa
+        done
+        """
+    }
+}
+
+if( params.groopm != " " || params.all == "T" ) {
+    file(params.groopmDir).mkdirs()
+    
+    process GroopM {
+        cpus params.cpus
+        
+        input:
+        file assembly from assemblyChannel_7
+        file bams from sortedChannel_4.toList()
+        file bams_idx from indexedChannel_2
+        
+        output:
+        file("*") into groopmChannel
+        
+        shell:
+        """
+        groopm parse -t !{params.cpus} -c 1000 database.gm !{assembly} !{bams}
+        groopm core database.gm
+        groopm recruit -c 1000
+        groopm extract -t !{params.cpus} database.gm !{assembly} -o GroopM
+        """
+    }
+}
+
+if( params.metabat != " " || params.all == "T" ) {
+    file(params.metabatDir).mkdirs()
+    
+    process Metabat {
+        publishDir "${params.binDir}", mode: 'copy'
+        cpus params.cpus
+        
+        input:
+        file assembly from assemblyChannel_3
+        file depth from abunChannel
+        
+        output:
+        file("bin*") into metabatChannel
+        file("bin*") into metabatChannel_2 mode flatten
+        
+        shell:
+        """
+        /pasteur/homes/qletourn/tools/metabat/metabat -i !{assembly} -a depth.txt -o bin -t !{params.cpus} --minSamples 5
+        """
+    }
+}
+
+if( params.concoct != " " || params.all == "T" ) {
+    file(params.concoctDir).mkdirs()
+    
+    process CONCOCT {
+        
+        //~ cpus params.cpus
+        
+        input:
+        file assembly from assemblyChannel_4
+        file abun_prof from abundanceProfileChannel
+        file link from linkageChannel
+        
+        output:
+        file("Concoct/*") into concoctChannel
+        
+        shell:
+        """
+        cut -f1,3- !{abun_prof} > covTableR.tsv
+        concoct -c !{params.nb_cluster} --coverage_file covTableR.tsv --composition_file !{assembly} -b Concoct/
+        
+        nb_clust=`sort -t "," -rnk2,2 Concoct/clustering_gt1000.csv | head -n 1 | cut -f 2 -d ","`
+        for clust in `seq \$nb_clust`;do
+            grep ",\$clust" Concoct/clustering_gt1000.csv | cut -f 1 -d "," > list.txt
+            python !{params.scripts}/extract_fasta_from_list.py !{assembly} list.txt bin.\$clust.fa
+        done
+        """
+    }
+}
+
+if( params.cocacola != " " || params.all == "T" ) {
+    file(params.cocacolaDir).mkdirs()
+    
+    process COCACOLA {
+        
+        //~ cpus params.cpus
+        
+        input:
+        file abun_table from abundanceProfileChannel_2
+        file link from linkageChannel_2
+        file assembly from assemblyChannel_5
+        
+        output:
+        file("*") into cocacolaChannel
+        
+        shell:
+        """
+        nb_contigs=`grep "^>" !{assembly} | wc -l`
+        python /pasteur/homes/qletourn/tools/CONCOCT-0.4.0/scripts/fasta_to_features.py !{assembly} \$nb_contigs 4 kmer_4.csv
+        python /pasteur/homes/qletourn/tools/COCACOLA-python/cocacola.py --contig_file !{assembly} --abundance_profiles !{abun_table} --composition_profiles kmer_4.csv --out result.csv
+        """
+    }
+}
+
+if( params.mycc != " " || params.all == "T" ) {
+    file(params.myccDir).mkdirs()
+    
+    process MyCC {
+        input:
+        file assembly from assemblyChannel_6
+        file coverage from abunChannel_2
+        
+        output:
+        
+        shell:
+        """
+        cut -f1,4- !{coverage} > abun.txt
+        python /pasteur/homes/qletourn/tools/MyCC/MyCC.py !{assembly} -a abun.txt -meta
+        """
+    }
 }
 
 
-process annotaion {
-    cpus params.cpus
-    memory "100G"
+//~ process checkm {
+    //~ cpus params.cpus
+    //~ memory "100G"
     
-    input:
-    file(bins) from binChannel.first()
+    //~ input:
+    //~ file(bins) from binChannel.first()
     
-    output:
-    file("chkm_res/tree_qa+qa.tsv") into annotChannel
+    //~ output:
+    //~ file("chkm_res/tree_qa+qa.tsv") into annotChannel
     
-    shell:
-    """
-    if ! mkdir chkm_res 2>/dev/null ; then
-        rm -r chkm_res
-        mkdir chkm_res
-    fi
+    //~ shell:
+    //~ '''
+    //~ if ! mkdir chkm_res 2>/dev/null ; then
+        //~ rm -r chkm_res
+        //~ mkdir chkm_res
+    //~ fi
     
-    checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} chkm_res
-    checkm tree_qa -f chkm_res/tree_qa.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res
-    checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res chkm_res/lineage.ms
-    checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa chkm_res/lineage.ms !{params.binDir} chkm_res
-    checkm qa -t !{params.cpus} -f chkm_res/qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm lineage.ms chkm_res
-     
-    join -t \$'\t' -1 1 -2 1 -o 1.1,1.4,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,2.10,2.11,2.12,2.13,2.14 <(tail -n +2 chkm_res/tree_qa.tsv | sort -k1,1) <(tail -n +2 chkm_res/qa_res.tsv | sort -k1,1) | sed '1s/^/Bin id\tTaxonomy\tMarker lineage\t# genomes\t# markers\tmarker sets\t0\t1\t2\t3\t4\t5+\tCompleteness\tContamination\tStrain heterogeneity\n/' > chkm_res/tree_qa+qa.tsv
+    //~ checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir} chkm_res
+    //~ checkm tree_qa -f chkm_res/tree_qa.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res
+    //~ checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res chkm_res/lineage.ms
+    //~ checkm analyze -t !{params.cpus} --tmpdir /pasteur/homes/qletourn/tmp_chkm -x fa chkm_res/lineage.ms !{params.binDir} chkm_res
+    //~ checkm qa -t !{params.cpus} -f chkm_res/qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res/lineage.ms chkm_res
     
-    cp -r chkm_res !{params.out}
-    """
-}
+    //~ echo -e 'Bin id\tTaxonomy\tMarker lineage\t# genomes\t# markers\tmarker sets\t0\t1\t2\t3\t4\t5+\tCompleteness\tContamination\tStrain heterogeneity' > chkm_res/tree_qa+qa.tsv
+    //~ join -t $'\t' -1 1 -2 1 -o 1.1,1.4,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,2.10,2.11,2.12,2.13,2.14 <(tail -n +2 chkm_res/tree_qa.tsv | sort -k1,1) <(tail -n +2 chkm_res/qa_res.tsv | sort -k1,1) >> chkm_res/tree_qa+qa.tsv
+    
+    //~ cp -r chkm_res !{params.out}
+    //~ '''
+//~ }
 
-//~ annotChannel = Channel.fromPath("/pasteur/homes/qletourn/binning_wf/Bacteria_V3/chkm_res/tree_qa.tsv")
 
 //~ process dotplot {
     //~ publishDir "${params.out}", mode: 'copy'
@@ -457,147 +873,120 @@ process annotaion {
     
     //~ shell:
     //~ """
-    //~ bash /pasteur/homes/qletourn/scripts/dotplot.sh !{annot} !{params.binDir}
+    //~ bash !{params.scripts}/dotplot.sh !{annot} !{params.binDir}
     //~ """
 //~ }
 
-binChannel_2 = Channel.fromPath("${baseDir}/../../binning_wf/Bacteria_V3/bins/bin.*.fa")
+//~ file(params.annotDir).mkdirs()
 
-file(params.annotDir).mkdirs()
-
-process blast {
-    publishDir "$params.annotDir", mode: 'copy'
-    cpus params.cpus
-    memory "20G"
+//~ process blast {
+    //~ publishDir "$params.annotDir", mode: 'copy'
+    //~ cpus params.cpus
+    //~ memory "20G"
     
-    input:
-    file(fasta) from binChannel_2
+    //~ input:
+    //~ file(fasta) from binChannel_2
     
-    output:
-    set file(fasta), file("*_nt.txt") into blastChannel //, file("*_catalogue.txt")
+    //~ output:
+    //~ set file(fasta), file("*_nt.txt") into blastChannel //, file("*_catalogue.txt")
     
-    script:
-    fasta_bn = fasta.baseName
-    """
-    #!/bin/bash
-    # local DB
-    blastn -query ${fasta} -out ${fasta_bn}_nt.txt -outfmt \
-           "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
-           -db /pasteur/homes/qletourn/Blastdb/Bact_Anita \
-           -evalue ${params.evalue} -num_threads ${params.cpus} \
-           -max_target_seqs ${params.hit}
-    # NCBI
-    #blastn -query ${fasta} -out ${fasta_bn}_nt.txt -outfmt \
-           "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
-           -db ${params.nt} \
-           -evalue ${params.evalue} -num_threads ${params.cpus} \
-           -max_target_seqs ${params.hit}
-    # rVDB
-    #blastn -query ${fasta} -out ${fasta_bn}_rvdb.txt -outfmt \
-           "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
-           -db ${params.rvdb} \
-           -evalue ${params.evalue} -num_threads ${params.cpus}
-    #cat ${fasta_bn}_rvdb.txt >> ${fasta_bn}_nt.txt
-    # Microbial catalogue
-    #blastn -query ${fasta} -out ${fasta_bn}_catalogue.txt -outfmt \
-           "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
-           -db ${params.catalogue}  \
-           -evalue ${params.evalue} -num_threads ${params.cpus}
-    """
-}
+    //~ script:
+    //~ fasta_bn = fasta.baseName
+    //~ """
+    //~ #!/bin/bash
+    //~ # local DB
+    //~ blastn -query ${fasta} -out ${fasta_bn}_nt.txt -outfmt \
+           //~ "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
+           //~ -db /pasteur/homes/qletourn/Blastdb/Bact_Anita \
+           //~ -evalue ${params.evalue} -num_threads ${params.cpus} \
+           //~ -max_target_seqs ${params.hit}
+    //~ # NCBI
+    //~ #blastn -query ${fasta} -out ${fasta_bn}_nt.txt -outfmt \
+           //~ "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
+           //~ -db ${params.nt} \
+           //~ -evalue ${params.evalue} -num_threads ${params.cpus} \
+           //~ -max_target_seqs ${params.hit}
+    //~ # rVDB
+    //~ #blastn -query ${fasta} -out ${fasta_bn}_rvdb.txt -outfmt \
+           //~ "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
+           //~ -db ${params.rvdb} \
+           //~ -evalue ${params.evalue} -num_threads ${params.cpus}
+    //~ #cat ${fasta_bn}_rvdb.txt >> ${fasta_bn}_nt.txt
+    //~ # Microbial catalogue
+    //~ #blastn -query ${fasta} -out ${fasta_bn}_catalogue.txt -outfmt \
+           //~ "6 qseqid sseqid qlen length mismatch gapopen qstart qend sstart send pident qcovs evalue bitscore" \
+           //~ -db ${params.catalogue}  \
+           //~ -evalue ${params.evalue} -num_threads ${params.cpus}
+    //~ """
+//~ }
 
 //~ blastChannel = Channel.fromPath("${baseDir}/../../binning_wf/Bacteria_V3/Annot/bin.*_nt.txt")
 //~ binChannel_2 = Channel.fromPath("${baseDir}/../../binning_wf/Bacteria_V3/bins/bin.*.fa")
 
-process taxonomy {
-    publishDir "$params.annotDir", mode: 'copy'
-    memory "20G"
+//~ process taxonomy {
+    //~ publishDir "$params.annotDir", mode: 'copy'
+    //~ memory "20G"
     
-    //echo true
+    //~ //echo true
     
-    input:
-    set file(fasta), file(nt) from blastChannel //, file(catalogue)   
-    //~ file(nt) from blastChannel //, file(catalogue)   
-    //~ file(fasta) from binChannel_2
+    //~ input:
+    //~ set file(fasta), file(nt) from blastChannel //, file(catalogue)   
+    //~ //~~ file(nt) from blastChannel //, file(catalogue)   
+    //~ //~~ file(fasta) from binChannel_2
     
-    output:
-    file("*_krona.txt") into taxChannel
-    file("*_not_annotated.fasta") into notAnnotatedChannel
-    //file("log.txt") into logChannel
-    file("*_{taxonomy,annotation}.txt") into resChannel mode flatten
+    //~ output:
+    //~ file("*_krona.txt") into taxChannel
+    //~ file("*_not_annotated.fasta") into notAnnotatedChannel
+    //~ //file("log.txt") into logChannel
+    //~ file("*_{taxonomy,annotation}.txt") into resChannel mode flatten
     
-    script:
-    fasta_bn = fasta.baseName
-    """
-    #!/bin/bash
-    tax_count=`wc -l ${nt} | cut -f 1 -d " "`
-    if [ "\$tax_count" -gt "0" ]; then
-        # Annot ncbi
-        python ${baseDir}/../../scripts/get_taxonomy.py -i ${nt} \
-                -o ${fasta_bn}_taxonomy.txt -t ${params.gitaxidnucl} \
-                -n ${params.names} -d ${params.nodes}
-        python ${baseDir}/../../scripts/ExtractNCBIDB.py \
-                -f ${nt} -g ${fasta_bn}_taxonomy.txt -fc ${params.coverage} \
-                -o ${fasta_bn}_annotation.txt -nb 1
-        # Interest column for krona
-        cut -s -f 3-10 ${fasta_bn}_annotation.txt > ${fasta_bn}_annotation_interest.txt
+    //~ script:
+    //~ fasta_bn = fasta.baseName
+    //~ """
+    //~ #!/bin/bash
+    //~ tax_count=`wc -l ${nt} | cut -f 1 -d " "`
+    //~ if [ "\$tax_count" -gt "0" ]; then
+        //~ # Annot ncbi
+        //~ python !{params.scripts}/get_taxonomy.py -i ${nt} \
+                //~ -o ${fasta_bn}_taxonomy.txt -t ${params.gitaxidnucl} \
+                //~ -n ${params.names} -d ${params.nodes}
+        //~ python !{params.scripts}/ExtractNCBIDB.py \
+                //~ -f ${nt} -g ${fasta_bn}_taxonomy.txt -fc ${params.coverage} \
+                //~ -o ${fasta_bn}_annotation.txt -nb 1
+        //~ # Interest column for krona
+        //~ cut -s -f 3-10 ${fasta_bn}_annotation.txt > ${fasta_bn}_annotation_interest.txt
         
-        # Get sequence not annotated
-        if [ -f ${fasta_bn}_catalogue_annotation.txt ]; then
-            cat  ${fasta_bn}_annotation.txt ${fasta_bn}_catalogue_annotation.txt\
-             > annotated
-            python ${baseDir}/../../scripts/extract_fasta.py -q annotated \
-                -t ${fasta} -n -o ${fasta_bn}_not_annotated.fasta
-        else
-            python ${baseDir}/../../scripts/extract_fasta.py \
-                -q ${fasta_bn}_annotation.txt -t ${fasta} -n \
-                -o ${fasta_bn}_not_annotated.fasta
-        fi
+        //~ # Get sequence not annotated
+        //~ if [ -f ${fasta_bn}_catalogue_annotation.txt ]; then
+            //~ cat  ${fasta_bn}_annotation.txt ${fasta_bn}_catalogue_annotation.txt\
+             //~ > annotated
+            //~ python !{params.scripts}/extract_fasta.py -q annotated \
+                //~ -t ${fasta} -n -o ${fasta_bn}_not_annotated.fasta
+        //~ else
+            //~ python !{params.scripts}/extract_fasta.py \
+                //~ -q ${fasta_bn}_annotation.txt -t ${fasta} -n \
+                //~ -o ${fasta_bn}_not_annotated.fasta
+        //~ fi
         
         
-        # Create Krona annotation
-        while read line; do
-            echo -e "1\t\${line}"
-        done < ${fasta_bn}_annotation_interest.txt > ${fasta_bn}_krona.txt
-        annot=`wc -l ${fasta_bn}_krona.txt | cut -f 1 -d ' '`
-        #echo "\$count_reads" > log.txt
-        #echo "\$annot" >>log.txt
-        # Count not annoted elements
-        if [ "\$count_reads" -gt "\$annot" ]; then
-            val=\$(( count_reads - annot))
+        //~ # Create Krona annotation
+        //~ while read line; do
+            //~ echo -e "1\t\${line}"
+        //~ done < ${fasta_bn}_annotation_interest.txt > ${fasta_bn}_krona.txt
+        //~ annot=`wc -l ${fasta_bn}_krona.txt | cut -f 1 -d ' '`
+        //~ #echo "\$count_reads" > log.txt
+        //~ #echo "\$annot" >>log.txt
+        //~ # Count not annoted elements
+        //~ if [ "\$count_reads" -gt "\$annot" ]; then
+            //~ val=\$(( count_reads - annot))
         
-            echo -e "\$val\tNA\tNA\tNA\tNA\tNA\tNA\tNA" >> ${fasta_bn}_krona.txt
-        fi
-    else 
-        cat ${fasta} > ${fasta_bn}_not_annotated.fasta
-        touch ${fasta_bn}_krona.txt ${fasta_bn}_annotation.txt \
-            ${fasta_bn}_annotation.txt
-    fi
-    """
-}
+            //~ echo -e "\$val\tNA\tNA\tNA\tNA\tNA\tNA\tNA" >> ${fasta_bn}_krona.txt
+        //~ fi
+    //~ else 
+        //~ cat ${fasta} > ${fasta_bn}_not_annotated.fasta
+        //~ touch ${fasta_bn}_krona.txt ${fasta_bn}_annotation.txt \
+            //~ ${fasta_bn}_annotation.txt
+    //~ fi
+    //~ """
+//~ }
 
-//~ # count number elements in annotated compared to the number of sequence
-        //~ # to annot
-        //~ #~catalogue_count=`wc -l ${catalogue} | cut -f 1 -d " "`
-        //~ #echo "\$catalogue_count" > log.txt
-        //~ #~count_reads=`grep "^>" -c ${fasta}`
-        
-        //~ # Add Catalogue annotation
-        //~ #~if [ "\$catalogue_count" -gt "0" ]; then
-            //~ #~cut -f 1 -s ${fasta_bn}_annotation.txt > list_annotated
-            //~ #~annot_nt=`wc -l list_annotated | cut -f 1 -d " "`
-            //~ #count_reads=`grep "^>" -c !{fasta}`
-            //~ #echo "\$count_reads" >> log.txt
-            //~ #~if [ "\$count_reads" -gt "\$annot_nt" ]; then
-                //~ # Get elements by catalogue and not annotated by ncbi
-                //~ #TODO Need to get the best hit only
-                //~ #~python ${baseDir}/../../scripts/extract_blast.py -i list_annotated \
-                    //~ -b ${catalogue} -n -o ${fasta_bn}_catalogue_annotation.txt
-                //~ # Get MGS annotation if they are annoted against mgs
-                //~ #~python ${baseDir}/../../scripts/match_mgs.py \
-                    //~ -i ${fasta_bn}_catalogue_annotation.txt -b ${params.mgs} \
-                    //~ -o ${fasta_bn}_annotation_mgs.txt
-                //~ #~cat ${fasta_bn}_annotation_mgs.txt >> ${fasta_bn}_annotation_interest.txt
-            //~ #~fi
-        //~ #~fi
-        
