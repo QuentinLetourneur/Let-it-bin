@@ -984,7 +984,7 @@ if( params.mycc != " " || params.all == "T" ) {
 else {
     myccChannel = Channel.from("a")
     myccChannel_2 = Channel.empty()
-    myccChannel_3 = Chhanel.from("a")
+    myccChannel_3 = Channel.from("a")
 }
 
 process checkm {
