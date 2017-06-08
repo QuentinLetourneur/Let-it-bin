@@ -107,6 +107,7 @@ params.contigs = ""
 params.count_matrix = ""
 params.scripts = "/pasteur/homes/qletourn/scripts"
 params.interleaved = ""
+params.refs_info = "/pasteur/homes/qletourn/refs_info.tsv"
 //~ params.chkmDir = "${params.out}/chkm_res"
 //~ params.vp1 = "$baseDir/databases/vp1_seq.fasta"
 //~ params.ncbi = "$baseDir/databases/ncbi_viruses.fna"
@@ -190,8 +191,9 @@ else if( params.skiptrim == "F" ) {
         
         output:
         set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
-        file("*_1.fastq") into R1Channel
-        file("*_2.fastq") into R2Channel
+        set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel_2
+        //~ file("*_1.fastq") into R1Channel
+        //~ file("*_2.fastq") into R2Channel
         file("*.fastq") into mappingChannel mode flatten
         
         script:
@@ -229,6 +231,30 @@ else {
 
 if( params.contigs == "" && params.multi_assembly == "false" ) {
     
+    process khmer {
+        cpus params.cpus
+        //memory "100000"
+        //clusterOptions='--qos=normal -p common'
+        
+        input:
+        set pair_id, file(fw), file(rv) from trimChannel
+        
+        output:
+        //~ set pair_id, file("*t_1.fastq"), file("*t_2.fastq") into khmerChannel
+        file("*t_1.fastq") into R1Channel
+        file("*t_2.fastq") into R2Channel
+        file("interleaved.pe") into conv_fastqChannel
+        
+        script:
+        """
+        interleave-reads.py ${fw} ${rv} --output interleaved.pe
+        normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+        filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+        extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+        split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+        """
+    }
+    
     process merge {
         
         input:
@@ -244,28 +270,6 @@ if( params.contigs == "" && params.multi_assembly == "false" ) {
         """
     }
     
-    process khmer {
-        cpus params.cpus
-        //memory "100000"
-        //clusterOptions='--qos=normal -p common'
-        
-        input:
-        set pair_id, file(fw), file(rv) from mergeChannel
-        
-        output:
-        set pair_id, file("*t_1.fastq"), file("*t_2.fastq") into khmerChannel
-        file("interleaved.pe") into conv_fastqChannel
-        
-        script:
-        """
-        interleave-reads.py ${fw} ${rv} --output interleaved.pe
-        normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-        filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-        extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-        split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-        """
-    }
-    
     process assembly {
         // permet de copier dans myDir les fichiers de l'output
         publishDir "$myDir", mode: 'copy'
@@ -275,7 +279,7 @@ if( params.contigs == "" && params.multi_assembly == "false" ) {
             clusterOptions='--qos=fast -C clcbio' 
         }
         input:
-        set pair_id, file(forward), file(reverse) from khmerChannel
+        set pair_id, file(forward), file(reverse) from mergeChannel
         
         output:
         file("assembly/*_{spades,clc,minia}.fasta") into assemblyChannel
@@ -318,7 +322,7 @@ else if( params.contigs == "" && params.multi_assembly == "true" ) {
         //~ clusterOptions='--qos=normal'
         
         input:
-        set pair_id, file(fw), file(rv) from trimChannel
+        set pair_id, file(fw), file(rv) from trimChannel_2
         
         output:
         set pair_id, file("*t_1.fastq"), file("*t_2.fastq") into khmerChannel
@@ -397,59 +401,34 @@ else if( params.contigs == "" && params.multi_assembly == "true" ) {
     }
 }
 else {
-    cdhitChannel = Channel.fromPath("${params.contigs}")
+    assemblyChannel = Channel.fromPath("${params.contigs}")
                      .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_2 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_3 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_4 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_5 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_6 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_7 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_8 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_9 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_10 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ assemblyChannel_11 = Channel.fromPath("${params.contigs}")
-                     //~ .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
-    //~ if( params.metacluster5 !=  " " ) {
-        //~ conv_fastqChannel = Channel.fromPath("${params.interleaved}")
-                         //~ .ifEmpty { exit 1, "You have to give the path to the interleaved.pe file if you want to run metacluster5 without doing the assembly" }
-    //~ }
+    assemblyChannel_2 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_3 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_4 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_5 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_6 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_7 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_8 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_9 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_10 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    assemblyChannel_11 = Channel.fromPath("${params.contigs}")
+                     .ifEmpty { exit 1, "Cannot find the contigs file: ${params.contigs}" }
+    if( params.metacluster5 !=  " " ) {
+        conv_fastqChannel = Channel.fromPath("${params.interleaved}")
+                         .ifEmpty { exit 1, "You have to give the path to the interleaved.pe file if you want to run metacluster5 without doing the assembly" }
+    }
 }
 
-process cdhit {
-    publishDir "$myDir/assembly", mode: 'copy'
-    cpus params.cpus
-    clusterOptions='--qos=normal -p common'
-    
-    input:
-    file contigs from cdhitChannel.toList()
-    
-    output:
-    file("cata_contig_nr.fasta") into assemblyChannel
-    file("cata_contig_nr.fasta") into assemblyChannel_2
-    file("cata_contig_nr.fasta") into assemblyChannel_3
-    file("cata_contig_nr.fasta") into assemblyChannel_4
-    file("cata_contig_nr.fasta") into assemblyChannel_5
-    file("cata_contig_nr.fasta") into assemblyChannel_6
-    file("cata_contig_nr.fasta") into assemblyChannel_7
-    file("cata_contig_nr.fasta") into assemblyChannel_8
-    file("cata_contig_nr.fasta") into assemblyChannel_9
-    file("cata_contig_nr.fasta") into assemblyChannel_11
-    
-    shell:
-    """
-    cd-hit-est -i !{contigs} -o cata_contig_nr.fasta -c 0.95 -T !{params.cpus} -aS 0.9 -d 0 -g 1 -M 0
-    """
-}
 
 bowt_refDir = file(params.bowt_index)
 bowt_refDir.mkdirs()
@@ -478,6 +457,8 @@ if( params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
 
         //cpus params.cpus
         
+        modules = 'Python/2.7.8:samtools/1.3:mbma/tars'
+        
         input:
         file idx from indexChannel.first()
         
@@ -487,7 +468,7 @@ if( params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         
         shell:
         """
-        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
+        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t 4 -q fast --bowtie2 --shared -e quentin.letourneur@pasteur.fr
         bash !{params.scripts}/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
         rm -r mapping/sam
         cp -r mapping/ !{params.out}/
@@ -702,6 +683,7 @@ if( params.scimm != " " || params.all == "T" ) {
         output:
         file("bin*") into scimmChannel
         set val("SCIMM"), file("bin*") into scimmChannel_2
+        val("a") into scimmChannel_3
         
         shell:
         """
@@ -717,6 +699,7 @@ if( params.scimm != " " || params.all == "T" ) {
 else { 
     scimmChannel = Channel.from("a")
     scimmChannel_2 = Channel.empty()
+    scimmChannel_3 = Channel.from("a")
 }
 
 //~ if( params.abundancebin != " " || params.all == "T" ) {
@@ -751,6 +734,7 @@ if( params.canopy != " " || params.all == "T" ) {
         output:
         file("bin*") into canopyChannel
         set val("Canopy"), file("bin*") into canopyChannel_2
+        val("a") into canopyChannel_3
         
         shell:
         '''
@@ -759,8 +743,8 @@ if( params.canopy != " " || params.all == "T" ) {
         cc.bin -n !{params.cpus} -i count_matrix.tsv -o cluster.out
         nb_clust=`sort -rnk1,1 cluster.out | head -n 1 | egrep -o "CAG[0-9]+" | egrep -o "[0-9]+"`
         for clust in `seq $nb_clust`;do
-            grep "CAG\$clust" cluster.out | cut -f 2 > list.txt
-            python !{params.scripts}/extract_fasta_from_list !{assembly} list.txt bin.\$clust.fa
+            egrep "CAG0*\$clust" cluster.out | cut -f 2 > list.txt
+            python !{params.scripts}/extract_fasta_from_list.py !{assembly} list.txt bin.\$clust.fa
         done
         cp bin* !{params.canopyDir}
         '''
@@ -769,6 +753,7 @@ if( params.canopy != " " || params.all == "T" ) {
 else {
     canopyChannel = Channel.from("a")
     canopyChannel_2 = Channel.empty()
+    canopyChannel_3 = Channel.from("a")
 }
 
 //~ if( params.mbbc != " " || params.all == "T" ) {
@@ -816,6 +801,7 @@ if( params.maxbin != " " || params.all == "T" ) {
     
     process maxbin {
         cpus params.cpus
+        module = 'gcc/4.9.0:bowtie2/2.2.3:hmmer/3.1b1:FragGeneScan/1.30:idba/1.1.1:MaxBin/2.2.3'
         
         input:
         file assembly from assemblyChannel_8
@@ -824,15 +810,16 @@ if( params.maxbin != " " || params.all == "T" ) {
         output:
         file("bin*") into maxbinChannel
         set val("MaxBin"), file("bin*") into maxbinChannel_2
+        val("a") into maxbinChannel_3
         
         shell:
         """
         nb_col=`awk '{print NF; exit}' !{abun}`
         bash !{params.scripts}/split_abun_file.sh !{abun} \$nb_col
         ls cov_mean* > list_abun_files.txt
-        run_MaxBin.pl -contig !{assembly} -out bin -abund_list list_abun_files.txt -thread !{params.cpus}
-        for file in `ls bin.0*`;do
-            name=`echo \$file | cut -f 1,2 -d "."`
+        run_MaxBin.pl -contig !{assembly} -out out -abund_list list_abun_files.txt -thread !{params.cpus}
+        for file in `ls out.0*`;do
+            name=`echo \$file | cut -f 1,2 -d "." | sed 's/out/bin/'`
             mv \$file \$name.fa
         done
         cp bin* !{params.maxbinDir}
@@ -842,6 +829,7 @@ if( params.maxbin != " " || params.all == "T" ) {
 else {
     maxbinChannel = Channel.from("a")
     maxbinChannel_2 = Channel.empty()
+    maxbinChannel_3 = Channel.from("a")
 }
 
 //~ if( params.groopm != " " || params.all == "T" ) {
@@ -886,6 +874,7 @@ if( params.metabat != " " || params.all == "T" ) {
         output:
         file("bin*") into metabatChannel
         set val("Metabat"), file("bin*") into metabatChannel_2
+        val("a") into metabatChannel_3
         
         shell:
         """
@@ -896,77 +885,82 @@ if( params.metabat != " " || params.all == "T" ) {
 else {
     metabatChannel = Channel.from("a")
     metabatChannel_2 = Channel.empty()
+    metabatChannel_3 = Channel.from("a")
 }
 
 if( params.concoct != " " || params.all == "T" ) {
-    file(params.concoctDir).mkdirs()
+    //~ file(params.concoctDir).mkdirs()
     
-    process CONCOCT {
+    //~ process CONCOCT {
         //~ cpus params.cpus
         
-        input:
-        file assembly from assemblyChannel_4
-        file abun_prof from abundanceProfileChannel
-        file link from linkageChannel
+        //~ input:
+        //~ file assembly from assemblyChannel_4
+        //~ file abun_prof from abundanceProfileChannel
+        //~ file link from linkageChannel
         
-        output:
-        file("bin*") into concoctChannel
-        set val("Concoct"), file("bin*") into concoctChannel_2
+        //~ output:
+        //~ file("bin*") into concoctChannel
+        //~ set val("Concoct"), file("bin*") into concoctChannel_2
+        //~ val("a") into concoctChannel_3
         
-        shell:
-        """
-        cut -f1,3- !{abun_prof} > covTableR.tsv
-        concoct -c !{params.nb_cluster} --coverage_file covTableR.tsv --composition_file !{assembly} -b Concoct/
+        //~ shell:
+        //~ """
+        //~ cut -f1,3- !{abun_prof} > covTableR.tsv
+        //~ concoct -c !{params.nb_cluster} --coverage_file covTableR.tsv --composition_file !{assembly} -b Concoct/
         
-        nb_clust=`sort -t "," -rnk2,2 Concoct/clustering_gt1000.csv | head -n 1 | cut -f 2 -d ","`
-        for clust in `seq \$nb_clust`;do
-            grep ",\$clust" Concoct/clustering_gt1000.csv | cut -f 1 -d "," > list.txt
-            python !{params.scripts}/extract_fasta_from_list.py !{assembly} list.txt bin.\$clust.fa
-        done
-        cp bin* !{params.concoctDir}
-        """
-    }
+        //~ nb_clust=`sort -t "," -rnk2,2 Concoct/clustering_gt1000.csv | head -n 1 | cut -f 2 -d ","`
+        //~ for clust in `seq \$nb_clust`;do
+            //~ grep ",\$clust" Concoct/clustering_gt1000.csv | cut -f 1 -d "," > list.txt
+            //~ python !{params.scripts}/extract_fasta_from_list.py !{assembly} list.txt bin.\$clust.fa
+        //~ done
+        //~ cp bin* !{params.concoctDir}
+        //~ """
+    //~ }
 }
 else {
     concoctChannel = Channel.from("a")
     concoctChannel_2 = Channel.empty()
+    concoctChannel_3 = Channel.from("a")
 }
 
 if( params.cocacola != " " || params.all == "T" ) {
-    file(params.cocacolaDir).mkdirs()
+    //~ file(params.cocacolaDir).mkdirs()
     
-    process COCACOLA {
-        //~ cpus params.cpus
+    //~ process COCACOLA {
+        //~~ cpus params.cpus
         
-        input:
-        file abun_table from abundanceProfileChannel_2
-        file link from linkageChannel_2
-        file assembly from assemblyChannel_5
+        //~ input:
+        //~ file abun_table from abundanceProfileChannel_2
+        //~ file link from linkageChannel_2
+        //~ file assembly from assemblyChannel_5
         
-        output:
-        file("bin*") into cocacolaChannel
-        set val("Cocacola"), file("bin*") into cocacolaChannel_2
+        //~ output:
+        //~ file("bin*") into cocacolaChannel
+        //~ set val("Cocacola"), file("bin*") into cocacolaChannel_2
+        //~ val("a") into cocacolaChannel_3
         
-        shell:
-        """
-        nb_contigs=`grep "^>" !{assembly} | wc -l`
-        python /pasteur/homes/qletourn/tools/CONCOCT-0.4.0/scripts/fasta_to_features.py !{assembly} \$nb_contigs 4 kmer_4.csv
-        python /pasteur/homes/qletourn/tools/COCACOLA-python/cocacola.py --contig_file !{assembly} --abundance_profiles !{abun_table} --composition_profiles kmer_4.csv --out result.csv
-        nb_clust=`sort -t "," -rnk2,2 Concoct/clustering_gt1000.csv | head -n 1 | cut -f 2 -d ","`
-        for clust in `seq \$nb_clust`;do
-            grep ",\$clust" Concoct/clustering_gt1000.csv | cut -f 1 -d "," > list.txt
-            python !{params.scripts}/extract_fasta_from_list.py !{assembly} list.txt bin.\$clust.fa
-        done
-        cp bin* !{params.cocacolaDir}
-        """
-    }
+        //~ shell:
+        //~ """
+        //~ nb_contigs=`grep "^>" !{assembly} | wc -l`
+        //~ python /pasteur/homes/qletourn/tools/CONCOCT-0.4.0/scripts/fasta_to_features.py !{assembly} \$nb_contigs 4 kmer_4.csv
+        //~ python /pasteur/homes/qletourn/tools/COCACOLA-python/cocacola.py --contig_file !{assembly} --abundance_profiles !{abun_table} --composition_profiles kmer_4.csv --out result.csv --aux_dir /pasteur/homes/qletourn/tools/COCACOLA-python
+        //~ nb_clust=`sort -t "," -rnk2,2 Concoct/clustering_gt1000.csv | head -n 1 | cut -f 2 -d ","`
+        //~ for clust in `seq \$nb_clust`;do
+            //~ grep ",\$clust" Concoct/clustering_gt1000.csv | cut -f 1 -d "," > list.txt
+            //~ python !{params.scripts}/extract_fasta_from_list.py !{assembly} list.txt bin.\$clust.fa
+        //~ done
+        //~ cp bin* !{params.cocacolaDir}
+        //~ """
+    //~ }
 }
-else {
-    cocacolaChannel = Channel.from("a")
-    cocacolaChannel_2 = Channel.empty()
-}
+//~ else {
+    //~ cocacolaChannel = Channel.from("a")
+    //~ cocacolaChannel_2 = Channel.empty()
+    //~ cocacolaChannel_3 = Channel.from("a")
+//~ }
 
-//~ if( params.mycc != " " || params.all == "T" ) {
+if( params.mycc != " " || params.all == "T" ) {
     //~ file(params.myccDir).mkdirs()
     
     //~ process MyCC {
@@ -976,7 +970,9 @@ else {
         //~ file coverage from abunChannel_2
         
         //~ output:
-        //~ file ("*") into myccChannel
+        //~ file ("bin*") into myccChannel
+        //~ set val("MyCC"), file("bin*") into myccChannel_2
+        //~ val("a") into myccChannel_3
         
         //~ shell:
         //~ """
@@ -984,13 +980,18 @@ else {
         //~ python /pasteur/homes/qletourn/tools/MyCC/MyCC.py !{assembly} -a abun.txt -meta
         //~ """
     //~ }
-//~ }
-//~ else { myccChannel = Channel.from("a") }
+}
+else {
+    myccChannel = Channel.from("a")
+    myccChannel_2 = Channel.empty()
+    myccChannel_3 = Chhanel.from("a")
+}
 
 process checkm {
     cpus params.cpus
-    memory "70G"
-    clusterOptions='--qos=normal'
+    memory "100G"
+    clusterOptions='--qos=normal -p common'
+   
     
     input:
     file bins from scimmChannel.first()
@@ -1001,13 +1002,13 @@ process checkm {
     file bins_5 from maxbinChannel.first()
     //~~ file bins_6 from groopmChannel.first()
     file bins_7 from metabatChannel.first()
-    file bins_8 from concoctChannel.first()
-    file bins_9 from cocacolaChannel.first()
-    //~~ file bins_10 from myccChannel.first()
+    //~ file bins_8 from concoctChannel.first()
+    //~ file bins_9 from cocacolaChannel.first()
+    //~ file bins_10 from myccChannel.first()
     //~~ file bins_11 from likelybinChannel.first()
     
-    output:
-    file("chkm_res/tree_qa+qa.tsv") into annotChannel
+    //~ output:
+    //~ file("chkm_res/tree_qa+qa.tsv") into annotChannel
     
     shell:
     '''
@@ -1017,6 +1018,7 @@ process checkm {
             mkdir chkm_res
         fi
         
+	
         checkm tree -t !{params.cpus} -x fa --tmpdir /pasteur/homes/qletourn/tmp_chkm !{params.binDir}/\$tool chkm_res
         checkm tree_qa -f chkm_res/tree_qa.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res
         checkm lineage_set --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res chkm_res/lineage.ms
@@ -1024,9 +1026,9 @@ process checkm {
         checkm qa -t !{params.cpus} -f chkm_res/qa_res.tsv --tab_table --tmpdir /pasteur/homes/qletourn/tmp_chkm chkm_res/lineage.ms chkm_res
         
         echo -e 'Bin id\tTaxonomy\tMarker lineage\t# genomes\t# markers\tmarker sets\t0\t1\t2\t3\t4\t5+\tCompleteness\tContamination\tStrain heterogeneity' > chkm_res/tree_qa+qa.tsv
-        join -t \$'\t' -1 1 -2 1 -o 1.1,1.4,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,2.10,2.11,2.12,2.13,2.14 <(tail -n +2 chkm_res/tree_qa.tsv | sort -k1,1) <(tail -n +2 chkm_res/qa_res.tsv | sort -k1,1) >> chkm_res/tree_qa+qa.tsv
+        join -t $'\t' -1 1 -2 1 -o 1.1,1.4,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,2.10,2.11,2.12,2.13,2.14 <(tail -n +2 chkm_res/tree_qa.tsv | sort -k1,1) <(tail -n +2 chkm_res/qa_res.tsv | sort -k1,1) >> chkm_res/tree_qa+qa.tsv
         
-        cp -r chkm_res !{params.binDir}/\$tool/
+        cp -r chkm_res !{params.binDir}/\$tool
     done
     '''
 }
@@ -1049,7 +1051,27 @@ process checkm {
 
 //~ file(params.annotDir).mkdirs()
 
-blastinputChannel = scimmChannel_2.concat( canopyChannel_2, maxbinChannel_2, metabatChannel_2, concoctChannel_2, cocacolaChannel_2 )
+process binnings_done {
+    
+    input:
+    val inp1 from scimmChannel_3
+    val inp2 from canopyChannel_3
+    val inp3 from maxbinChannel_3
+    //~ val inp4 from concoctChannel_3
+    val inp5 from metabatChannel_3
+    //~ val inp6 from cocacolaChannel_3
+    //~ val inp7 from myccChannel_3
+    
+    output:
+    val("") into concatChannel
+    
+    shell:
+    """
+    echo "plop"
+    """
+}
+
+blastinputChannel = concatChannel.concat( scimmChannel_2, canopyChannel_2, maxbinChannel_2, metabatChannel_2 ) //, concoctChannel_2, cocacolaChannel_2, myccChannel_2
 
 process blast {
     //publishDir "$params.annotDir", mode: 'copy'
@@ -1061,6 +1083,9 @@ process blast {
     
     output:
     set val(soft), file(fasta), file("*_nt.txt") into blastChannel //, file("*_catalogue.txt")
+    
+    when:
+    soft != ""
     
     script:
     // fasta_bn = fasta.baseName
@@ -1104,7 +1129,7 @@ process taxonomy {
     //publishDir "$params.annotDir", mode: 'copy'
     memory "20G"
     
-    //echo true
+    //~ clusterOptions='--qos=normal'
     
     input:
     set soft, file(fasta), file(nt) from blastChannel //, file(catalogue)   
@@ -1171,6 +1196,23 @@ process taxonomy {
     cp *_not_annotated.fasta ${params.binDir}/${soft}/Annotation
     cp *_taxonomy.txt ${params.binDir}/${soft}/Annotation
     cp *_annotation.txt ${params.binDir}/${soft}/Annotation
+    """
+}
+
+process evaluation {
+    
+    input:
+    file annotations from resChannel.toList()
+    
+    output:
+    file("contamination.png") into finishChannel
+    
+    shell:
+    """
+    for tool in `ls !{params.binDir}/`;do
+        Rscript !{params.scripts}/binning_stats.R !{params.binDir}/\$tool/bin !{params.binDir}/\$tool !{params.binDir}/\$tool/Annotation !{params.refs_info}
+        cp contamination.png completeness.png !{params.binDir}/\$tool
+    done
     """
 }
 
