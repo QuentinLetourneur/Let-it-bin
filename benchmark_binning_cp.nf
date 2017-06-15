@@ -1211,7 +1211,7 @@ process evaluation {
     """
     for tool in `ls !{params.binDir}/`;do
         Rscript !{params.scripts}/binning_stats.R !{params.binDir}/\$tool/bin !{params.binDir}/\$tool !{params.binDir}/\$tool/Annotation !{params.refs_info}
-        cp contamination.png completeness.png !{params.binDir}/\$tool
+        cp contamination.png completeness.png !{params.binDir}/\$tool 1000000
     done
     """
 }
