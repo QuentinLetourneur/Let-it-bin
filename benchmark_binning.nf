@@ -103,7 +103,7 @@ params.canopyDir = "${params.binDir}/Canopy"
 params.abundancebinDir = "${params.binDir}/AbundanceBin"
 params.scimmDir = "${params.binDir}/SCIMM"
 params.likelybinDir = "${params.binDir}/LikelyBin"
-params.multi_assembly = "false"
+params.multi_assembly = "F"
 params.contigs = ""
 params.count_matrix = ""
 params.scripts = "/pasteur/projets/policy01/BioIT/quentin/scripts"
@@ -177,7 +177,6 @@ else if( params.skiptrim == "F" ) {
 
         output:
         set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into trimChannel
-        set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into trimChannel_2
         //~ file("*_1.fastq") into R1Channel
         //~ file("*_2.fastq") into R2Channel
         file("*.fastq") into mappingChannel mode flatten
@@ -190,36 +189,62 @@ else if( params.skiptrim == "F" ) {
         """
     }
     mappingChannel.subscribe { it.copyTo(cleanDir) }
-    
 }
 else {
-    trimChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"}
+    skiptrimChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"}
 }
 
-if( params.contigs == "" && params.multi_assembly == "false" ) {
+if( params.contigs == "" && params.multi_assembly == "F" ) {
 
-    process khmer {
-        cpus params.cpus
-        //memory "100000"
-        clusterOptions='--qos=normal -p common'
-
-        input:
-        set pair_id, file(fw), file(rv) from trimChannel
-
-        output:
-        //~ set pair_id, file("*t_1.fastq"), file("*t_2.fastq") into khmerChannel
-        file("*_filt_1.fastq") into R1Channel
-        file("*_filt_2.fastq") into R2Channel
-        file("interleaved.pe") into conv_fastqChannel
-
-        script:
-        """
-        interleave-reads.py ${fw} ${rv} --output interleaved.pe
-        normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-        filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-        extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-        split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-        """
+    if( params.skiptrim == "F" ) {
+        process khmer {
+            cpus params.cpus
+            //memory "100000"
+            clusterOptions='--qos=normal -p common'
+    
+            input:
+            set pair_id, file(fw), file(rv) from trimChannel
+    
+            output:
+            //~ set pair_id, file("*t_1.fastq"), file("*t_2.fastq") into khmerChannel
+            file("*_filt_1.fastq") into R1Channel
+            file("*_filt_2.fastq") into R2Channel
+            file("interleaved.pe") into conv_fastqChannel
+    
+            script:
+            """
+            interleave-reads.py ${fw} ${rv} --output interleaved.pe
+            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+            filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+            extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+            split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+            """
+        }
+    }
+    else {
+        process khmer {
+            cpus params.cpus
+            //memory "100000"
+            clusterOptions='--qos=normal -p common'
+    
+            input:
+            set pair_id, file(clean_reads) from skiptrimChannel
+    
+            output:
+            //~ set pair_id, file("*t_1.fastq"), file("*t_2.fastq") into khmerChannel
+            file("*_filt_1.fastq") into R1Channel
+            file("*_filt_2.fastq") into R2Channel
+            file("interleaved.pe") into conv_fastqChannel
+    
+            script:
+            """
+            interleave-reads.py ${clean_reads[0]} ${clean_reads[1]} --output interleaved.pe
+            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+            filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+            extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+            split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+            """
+        }
     }
 
     process merge {
@@ -281,30 +306,55 @@ if( params.contigs == "" && params.multi_assembly == "false" ) {
     }
 }
 // ERROR when the script is run with --multi_assembly true but don't understand where it comes from
-else if( params.contigs == "" && params.multi_assembly == "true" ) {
+else if( params.contigs == "" && params.multi_assembly == "T" ) {
 
-    process khmer {
-        cpus params.cpus
-        memory "60000"
-        clusterOptions='--qos=normal'
-
-        input:
-        set pair_id, file(fw), file(rv) from trimChannel_2
-
-        output:
-        set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
-        file("interleaved.pe") into conv_fastqChannel
-
-        script:
-        """
-        interleave-reads.py ${fw} ${rv} --output interleaved.pe
-        normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-        filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-        extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-        split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-        """
+    if( params.skiptrim == "F" ) {
+        process khmer {
+            cpus params.cpus
+            memory "60000"
+            clusterOptions='--qos=normal'
+            
+            input:
+            set pair_id, file(fw), file(rv) from trimChannel
+            
+            output:
+            set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
+            file("interleaved.pe") into conv_fastqChannel
+            
+            script:
+            """
+            interleave-reads.py ${fw} ${rv} --output interleaved.pe
+            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+            filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+            extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+            split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+            """
+        }
     }
-
+    else {
+        process khmer {
+            cpus params.cpus
+            memory "60000"
+            clusterOptions='--qos=normal'
+    
+            input:
+            set pair_id, file(clean_reads) from skiptrimChannel
+    
+            output:
+            set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
+            file("interleaved.pe") into conv_fastqChannel
+            
+            script:
+            """
+            interleave-reads.py ${clean_reads[0]} ${clean_reads[1]} --output interleaved.pe
+            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+            filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+            extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+            split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+            """
+        }
+    }
+    
     process assembly {
         // permet de copier dans myDir les fichiers de l'output
         publishDir "$myDir", mode: 'copy'
@@ -339,7 +389,7 @@ else if( params.contigs == "" && params.multi_assembly == "true" ) {
         fi
         """
     }
-
+    
     process cdhit {
         publishDir "$myDir/assembly", mode: 'copy'
         cpus params.cpus
@@ -435,6 +485,7 @@ if( params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
 
         shell:
         """
+        #!/bin/bash
         mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t 4 -q normal --bowtie2 --best -e !{params.email}
         bash !{params.scripts}/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
         rm -r mapping/sam
