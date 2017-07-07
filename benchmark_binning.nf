@@ -53,6 +53,7 @@ readChannel = Channel.fromFilePairs("${params.in}/*_{1,2}.fastq")
                 .map {file -> tuple(file.baseName.replaceAll(".fasta",""),file)}*/
 
 params.cpus = 4
+params.cpusmapping = 4
 params.cpusassembly = 12
 params.out = "$baseDir/../../binning_wf"
 params.binDir = "${params.out}/Binnings"
@@ -254,11 +255,12 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         file R2 from R2Channel.toList()
 
         output:
-        set val("mergefstq"), file("*_1.fastq"), file("*_2.fastq") into mergeChannel
-
+        set val("mergefstq"), file("mergefstq_1.fastq"), file("mergefstq_2.fastq") into mergeChannel
+        
         shell:
         """
-        bash !{params.scripts}/merge_fastq.sh !{R1} !{R2}
+        cat !{R1} > mergefstq_1.fastq
+        cat !{R2} > mergefstq_2.fastq
         """
     }
 
@@ -305,55 +307,55 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         """
     }
 }
-// ERROR when the script is run with --multi_assembly true but don't understand where it comes from
+
 else if( params.contigs == "" && params.multi_assembly == "T" ) {
 
-    if( params.skiptrim == "F" ) {
-        process khmer {
-            cpus params.cpus
-            memory "60000"
-            clusterOptions='--qos=normal'
+    //~ if( params.skiptrim == "F" ) {
+        //~ process khmer {
+            //~ cpus params.cpus
+            //~ memory "60000"
+            //~ clusterOptions='--qos=normal'
             
-            input:
-            set pair_id, file(fw), file(rv) from trimChannel
+            //~ input:
+            //~ set pair_id, file(fw), file(rv) from trimChannel
             
-            output:
-            set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
-            file("interleaved.pe") into conv_fastqChannel
+            //~ output:
+            //~ set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
+            //~ file("interleaved.pe") into conv_fastqChannel
             
-            script:
-            """
-            interleave-reads.py ${fw} ${rv} --output interleaved.pe
-            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-            filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-            extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-            split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-            """
-        }
-    }
-    else {
-        process khmer {
-            cpus params.cpus
-            memory "60000"
-            clusterOptions='--qos=normal'
+            //~ script:
+            //~ """
+            //~ interleave-reads.py ${fw} ${rv} --output interleaved.pe
+            //~ normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+            //~ filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+            //~ extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+            //~ split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+            //~ """
+        //~ }
+    //~ }
+    //~ else {
+        //~ process khmer {
+            //~ cpus params.cpus
+            //~ memory "60000"
+            //~ clusterOptions='--qos=normal'
     
-            input:
-            set pair_id, file(clean_reads) from skiptrimChannel
+            //~ input:
+            //~ set pair_id, file(clean_reads) from skiptrimChannel
     
-            output:
-            set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
-            file("interleaved.pe") into conv_fastqChannel
+            //~ output:
+            //~ set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
+            //~ file("interleaved.pe") into conv_fastqChannel
             
-            script:
-            """
-            interleave-reads.py ${clean_reads[0]} ${clean_reads[1]} --output interleaved.pe
-            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-            filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-            extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-            split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-            """
-        }
-    }
+            //~ script:
+            //~ """
+            //~ interleave-reads.py ${clean_reads[0]} ${clean_reads[1]} --output interleaved.pe
+            //~ normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+            //~ filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+            //~ extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+            //~ split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+            //~ """
+        //~ }
+    //~ }
     
     process assembly {
         // permet de copier dans myDir les fichiers de l'output
@@ -364,40 +366,46 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
             clusterOptions='--qos=fast -C clcbio'
         }
         input:
-        set pair_id, file(forward), file(reverse) from khmerChannel
+        //~ set pair_id, file(forward), file(reverse) from khmerChannel
+        set pair_id, file(reads) from skiptrimChannel
 
         output:
         file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel
         //file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel_2
-
+        
         shell:
         """
         mkdir assembly
         if [ !{params.mode} == "spades" ]
         then
-            spades.py --meta -1 !{forward} -2 !{reverse} -t !{params.cpusassembly} -o assembly/
+            
+            spades.py --meta -1 !{reads[0]} -2 !{reads[1]} -t !{params.cpusassembly} -o assembly/
             mv assembly/scaffolds.fasta assembly/!{pair_id}_spades.fasta
         elif [ !{params.mode} ==  "clc" ]
         then
-            clc_assembler -o assembly/contigs.fasta -p fb ss 180 250 -q -i !{forward} !{reverse} --cpus !{params.cpusassembly}
+            
+            clc_assembler -o assembly/contigs.fasta -p fb ss 180 250 -q -i !{reads[0]} !{reads[1]} --cpus !{params.cpusassembly}
             mv assembly/contigs.fasta assembly/!{pair_id}_clc.fasta
         else
-            #interleave-reads.py !{forward} !{reverse} --output assembly/!{pair_id}.pe
-            #minia -in assembly/!{pair_id}.pe -out assembly/!{pair_id} -nb-cores !{params.cpus}
-            !{baseDir}/gatb-minia-pipeline/gatb -1 !{forward} -2 !{reverse} -o assembly/!{pair_id}_gatb
-            #mv  assembly/!{pair_id}.contigs.fa assembly/!{pair_id}_minia.fasta
+            echo "plop"
         fi
         """
+        //~ #spades.py --meta -1 !{forward} -2 !{reverse} -t !{params.cpusassembly} -o assembly/
+        //~ #clc_assembler -o assembly/contigs.fasta -p fb ss 180 250 -q -i !{forward} !{reverse} --cpus !{params.cpusassembly}
+        //~ #interleave-reads.py !{forward} !{reverse} --output assembly/!{pair_id}.pe
+            //~ #minia -in assembly/!{pair_id}.pe -out assembly/!{pair_id} -nb-cores !{params.cpus}
+            //~ #!{baseDir}/gatb-minia-pipeline/gatb -1 !{forward} -2 !{reverse} -o assembly/!{pair_id}_gatb
+            //~ #mv  assembly/!{pair_id}.contigs.fa assembly/!{pair_id}_minia.fasta
     }
     
     process cdhit {
         publishDir "$myDir/assembly", mode: 'copy'
         cpus params.cpus
         clusterOptions='--qos=normal -p common'
-
+        
         input:
         file contigs from contigsChannel.toList()
-
+        
         output:
         file("cata_contig_nr.fasta") into assemblyChannel
         file("cata_contig_nr.fasta") into assemblyChannel_2
@@ -409,7 +417,7 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         file("cata_contig_nr.fasta") into assemblyChannel_8
         file("cata_contig_nr.fasta") into assemblyChannel_9
         file("cata_contig_nr.fasta") into assemblyChannel_11
-
+        
         shell:
         """
         bash !{params.scripts}/merge_fasta.sh !{contigs}
@@ -486,7 +494,7 @@ if( params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         shell:
         """
         #!/bin/bash
-        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t 4 -q normal --bowtie2 --best -e !{params.email}
+        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t {params.cpusmapping} -q normal --bowtie2 --best -e !{params.email}
         bash !{params.scripts}/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
         rm -r mapping/sam
         cp -r mapping/ !{params.out}/
@@ -516,9 +524,11 @@ if( params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
 else if (params.bamDir == "" && params.index_prefix != "") {
 
     process mapping_count {
-
+    
         //cpus params.cpus
-
+        
+        modules = 'Python/2.7.8:samtools/1.3:mbma/tars'
+        
         input:
         file assembly from assemblyChannel
 
@@ -528,7 +538,8 @@ else if (params.bamDir == "" && params.index_prefix != "") {
 
         shell:
         """
-        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t 6 -q normal --bowtie2 --best -e !{params.email}
+        #!/bin/bash
+        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t {params.cpusmapping} -q normal --bowtie2 --best -e !{params.email}
         bash !{params.scripts}/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
         rm -r mapping/sam
         cp -r mapping/ !{params.out}/
@@ -605,12 +616,28 @@ if ( params.concoct != " " || params.cocacola != " " || params.groopm != " " || 
 }
 
 if( params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || params.all == "T" ) {
+    
+    process gen_cov_bed {
+        
+        input:
+        file bam_sorted from sortedChannel_3
+        
+        output:
+        file("*.gcbout") into gen_cov_bedChannel
+        
+        shell:
+        """
+        bn=`echo !{bam_sorted} | cut -f1 -d "."`
+        genomeCoverageBed -ibam bam_sorted > \$bn.gcbout
+        """
+    }
+    
     process abun_and_link_profile {
 
         cpus params.cpus
 
         input:
-        file bam_sorted from sortedChannel_3.toList()
+        file bed_file from gen_cov_bedChannel.toList()
         file bam_idx from indexedChannel.toList()
         file assembly from assemblyChannel_2
 
@@ -620,10 +647,10 @@ if( params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || pa
         file("covTable.tsv") into abundanceProfileChannel_3
         file("linkTable.tsv") into linkageChannel
         file("linkTable.tsv") into linkageChannel_2
-
+        
         shell:
         """
-        python !{params.tools}/CONCOCT-0.4.0/scripts/gen_input_table.py !{assembly} !{bam_sorted} > covTable.tsv
+        python !{params.tools}/CONCOCT-0.4.0/scripts/gen_input_table.py !{assembly} !{bed_file} --isbedfiles > covTable.tsv
         python !{params.tools}/CONCOCT-0.4.0/scripts/bam_to_linkage.py -m !{params.cpus} --regionlength 500 --fullsearch !{assembly} !{bam_sorted} > linkTable.tsv
         """
     }
@@ -640,11 +667,8 @@ if( params.metacluster5 != " " ) {
 
         shell:
         """
-        args=!{fastq}
         if [ `awk '{print NF; exit}' \$args` -gt 1 ];then
-            for file in \$args;do
-                cat \$file >> merged.fastq
-            done
+            cat !{fastq} > merged.fastq
             egrep "^@[a-z]+" -A 1 merged.fastq | sed -e 's/^@/>/' -e '/^--/d' > merged.fa
         else
             egrep "^@[a-z]+" -A 1 !{fastq} | sed -e 's/^@/>/' -e '/^--/d' > merged.fa
