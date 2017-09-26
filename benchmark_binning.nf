@@ -676,6 +676,7 @@ if( params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || pa
 
         input:
         file bed_file from gen_cov_bedChannel.toList()
+        file bam_sorted from sortedChannel_3
         file bam_idx from indexedChannel.toList()
         file assembly from assemblyChannel_2
         
@@ -721,7 +722,7 @@ if( params.metabat != " " || params.mycc != " " || params.all == "T" ) {
     process jgi_summa_depths {
 
         input:
-        file bams from sortedChannel_3.toList()
+        file bams from sortedChannel_4.toList()
 
         output:
         file("depth.txt") into abunChannel
