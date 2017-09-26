@@ -130,6 +130,8 @@ cleanDir = file("${params.cleaned_reads}")
 cleanDir.mkdirs()
 
 if( params.contaminant != "" ) {
+    // Map reads on the genome(s) of organisms that could have been sequenced along the wanted genome.
+    // Only reads that don't map on it/them will be kept 
     process filtering {
         //publishDir "$myDir", mode: 'copy'
         cpus params.cpus
@@ -147,22 +149,23 @@ if( params.contaminant != "" ) {
         """
     }
     
-    
+    // reads cleaning
     process trimming {
         //publishDir "$cleanDir", mode: 'copy'
-        cpus params.cpus
-
+        
         input:
         set pair_id, file(forward), file(reverse) from unmappedChannel
-
+        
         output:
         set pair_id, file("*_1.fastq"), file("*_2.fastq") into trimChannel
+        file("*_1.fastq") into R1Channel
+        file("*_2.fastq") into R2Channel
         file("*.fastq") into mappingChannel mode flatten
-
+        
         script:
         """
-        AlienTrimmer -if ${forward} -ir ${reverse} -of ${pair_id}_1.fastq \
-        -or ${pair_id}_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
+        AlienTrimmer -if ${forward} -ir ${reverse} -of ${pair_id}_alien_1.fastq \
+        -or ${pair_id}_alien_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
         -l ${params.minlength}
         """
     }
@@ -170,6 +173,7 @@ if( params.contaminant != "" ) {
 
 }
 else if( params.skiptrim == "F" ) {
+    // reads cleaning
     process trimming {
         //publishDir "$myDir", mode: 'copy'
 
@@ -178,8 +182,8 @@ else if( params.skiptrim == "F" ) {
 
         output:
         set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into trimChannel
-        //~ file("*_1.fastq") into R1Channel
-        //~ file("*_2.fastq") into R2Channel
+        file("*_1.fastq") into R1Channel
+        file("*_2.fastq") into R2Channel
         file("*.fastq") into mappingChannel mode flatten
 
         script:
@@ -193,11 +197,15 @@ else if( params.skiptrim == "F" ) {
 }
 else {
     skiptrimChannel = Channel.fromFilePairs("${params.cleaned_reads}/*_{1,2}.fastq").ifEmpty { exit 1, "No clean reads were found"}
+    R1Channel = Channel.fromPath("${params.cleaned_reads}/*_1.fastq").ifEmpty { exit 1, "No forward clean reads were found"}
+    R2Channel = Channel.fromPath("${params.cleaned_reads}/*_2.fastq").ifEmpty { exit 1, "No reverse clean reads were found"}
 }
 
+// Perform a co-assembly
 if( params.contigs == "" && params.multi_assembly == "F" ) {
 
     if( params.skiptrim == "F" ) {
+        // filter reads redoudancy and even their aboudance
         process khmer {
             cpus params.cpus
             //memory "100000"
@@ -205,12 +213,12 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
     
             input:
             set pair_id, file(fw), file(rv) from trimChannel
-    
+            
             output:
             //~ set pair_id, file("*t_1.fastq"), file("*t_2.fastq") into khmerChannel
-            file("*_filt_1.fastq") into R1Channel
-            file("*_filt_2.fastq") into R2Channel
-            file("interleaved.pe") into conv_fastqChannel
+            file("*_filt_1.fastq") into R1_Channel
+            file("*_filt_2.fastq") into R2_Channel
+            //~ file("interleaved.pe") into conv_fastqChannel
     
             script:
             """
@@ -223,9 +231,10 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         }
     }
     else {
+        // filter reads redoudancy and even their aboudance
         process khmer {
             cpus params.cpus
-            //memory "100000"
+            memory "100000"
             clusterOptions='--qos=normal -p common'
     
             input:
@@ -233,9 +242,9 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
     
             output:
             //~ set pair_id, file("*t_1.fastq"), file("*t_2.fastq") into khmerChannel
-            file("*_filt_1.fastq") into R1Channel
-            file("*_filt_2.fastq") into R2Channel
-            file("interleaved.pe") into conv_fastqChannel
+            file("*_filt_1.fastq") into R1_Channel
+            file("*_filt_2.fastq") into R2_Channel
+            //~ file("interleaved.pe") into conv_fastqChannel
     
             script:
             """
@@ -247,12 +256,13 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             """
         }
     }
-
+    
+    // Pull all the forward/reverse reads together to make a co-assembly
     process merge {
 
         input:
-        file R1 from R1Channel.toList()
-        file R2 from R2Channel.toList()
+        file R1 from R1_Channel.toList()
+        file R2 from R2_Channel.toList()
 
         output:
         set val("mergefstq"), file("mergefstq_1.fastq"), file("mergefstq_2.fastq") into mergeChannel
@@ -263,7 +273,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         cat !{R2} > mergefstq_2.fastq
         """
     }
-
+    
     process assembly {
         // permet de copier dans myDir les fichiers de l'output
         publishDir "$myDir", mode: 'copy'
@@ -308,9 +318,11 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
     }
 }
 
+// perform a muti-assembly
 else if( params.contigs == "" && params.multi_assembly == "T" ) {
 
     //~ if( params.skiptrim == "F" ) {
+        // filter reads redoudancy and even their aboudance
         //~ process khmer {
             //~ cpus params.cpus
             //~ memory "60000"
@@ -334,6 +346,7 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         //~ }
     //~ }
     //~ else {
+        // filter reads redoudancy and even their aboudance
         //~ process khmer {
             //~ cpus params.cpus
             //~ memory "60000"
@@ -357,18 +370,21 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         //~ }
     //~ }
     
+    // make an assembly per sample
     process assembly {
         // permet de copier dans myDir les fichiers de l'output
         publishDir "$myDir", mode: 'copy'
-
+        
         cpus params.cpusassembly
+        memory "70G"
+        
         if(params.mode == "clc"){
             clusterOptions='--qos=fast -C clcbio'
         }
         input:
         //~ set pair_id, file(forward), file(reverse) from khmerChannel
         set pair_id, file(reads) from skiptrimChannel
-
+        
         output:
         file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel
         //file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel_2
@@ -379,7 +395,7 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         if [ !{params.mode} == "spades" ]
         then
             
-            spades.py --meta -1 !{reads[0]} -2 !{reads[1]} -t !{params.cpusassembly} -o assembly/
+            !{params.tools}/SPAdes-3.11.0-compiled/bin/spades.py --meta -1 !{reads[0]} -2 !{reads[1]} -t !{params.cpusassembly} -o assembly/
             mv assembly/scaffolds.fasta assembly/!{pair_id}_spades.fasta
         elif [ !{params.mode} ==  "clc" ]
         then
@@ -398,6 +414,7 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
             //~ #mv  assembly/!{pair_id}.contigs.fa assembly/!{pair_id}_minia.fasta
     }
     
+    // Pull all the generated contigs together and filter their redundancy
     process cdhit {
         publishDir "$myDir/assembly", mode: 'copy'
         cpus params.cpus
@@ -420,8 +437,8 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         
         shell:
         """
-        bash !{params.scripts}/merge_fasta.sh !{contigs}
-        cd-hit-est -i cata_contigs.fasta -o cata_contig_nr.fasta -c 0.95 -T !{params.cpus} -aS 0.9 -d 0 -g 1 -M 0
+        cat !{contigs} > cata_contigs.fasta
+        !{params.tools}/cdhit-master/cd-hit-est -i cata_contigs.fasta -o cata_contig_nr.fasta -c 0.95 -T !{params.cpus} -aS 0.9 -d 0 -g 1 -M 0
         """
     }
 }
@@ -461,7 +478,8 @@ bowt_refDir.mkdirs()
 //file(params.mappingDir).mkdirs()
 
 if( params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_index}/${params.index_prefix}.1.bt2").exists() ) {
-
+    
+    // generate bowtie2 index of the contigs
     process index {
         publishDir "$bowt_refDir", mode: 'copy'
         // cpus params.cpus
@@ -477,122 +495,140 @@ if( params.bamDir == "" && params.index_prefix != "" && ! file("${params.bowt_in
         bowtie2-build !{assembly} !{params.index_prefix}
         """
     }
-
+    
+    // map cleaned reads on the contigs
     process mapping_count {
-
+        
         //cpus params.cpus
-
-        modules = 'Python/2.7.8:samtools/1.3:mbma/tars'
-
+        
+        modules = 'Python/2.7.8:samtools/1.3:mbma/nextflow'
+        
         input:
+        file R1 from R1Channel.toList()
+        file R2 from R2Channel.toList()
         file idx from indexChannel.first()
-
+        
         output:
-        file("mapping/bam/*.bam") into bamChannel mode flatten
+        file("mapping/bam/Ech*.bam") into bamChannel mode flatten
+        file("mapping/bam/sorted*.bam") into sortedChannel
+        file("mapping/bam/sorted*.bam") into sortedChannel_2
+        file("mapping/bam/sorted*.bam") into sortedChannel_3
+        file("mapping/bam/sorted*.bam") into sortedChannel_4
         file("mapping/comptage/count_matrix.txt") into countChannel
-
+        
         shell:
         """
         #!/bin/bash
-        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t {params.cpusmapping} -q normal --bowtie2 --best -e !{params.email}
+        mbma.py mapping -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t !{params.cpusmapping} -q normal --bowtie2 --best -e !{params.email} --r1 !{R1} --r2 !{R2} -p common
         bash !{params.scripts}/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
-        rm -r mapping/sam
+        rm -r mapping/sam mapping/bam/filtered*
         cp -r mapping/ !{params.out}/
         """
     }
+    
+    //~ process sort_bam {
+        
+        //~ cpus params.cpus
 
+        //~ input:
+        //~ file bam from bamChannel
 
-    process sort_bam {
+        //~ output:
+        //~ file("*.sorted") into sortedChannel
+        //~ file("*.sorted") into sortedChannel_2
+        //~ file("*.sorted") into sortedChannel_3
+        //~ file("*.sorted") into sortedChannel_4
 
-        cpus params.cpus
-
-        input:
-        file bam from bamChannel
-
-        output:
-        file("*.sorted") into sortedChannel
-        file("*.sorted") into sortedChannel_2
-        file("*.sorted") into sortedChannel_3
-        file("*.sorted") into sortedChannel_4
-
-        shell:
-        """
-        samtools sort -o !{bam}.sorted -@ !{params.cpus} -O bam !{bam}
-        """
-    }
+        //~ shell:
+        //~ """
+        //~ samtools sort -o !{bam}.sorted -@ !{params.cpus} -O bam !{bam}
+        //~ """
+    //~ }
 }
 else if (params.bamDir == "" && params.index_prefix != "") {
-
+    
+    // map cleaned reads on the contigs
     process mapping_count {
     
         //cpus params.cpus
         
-        modules = 'Python/2.7.8:samtools/1.3:mbma/tars'
+        modules = 'Python/2.7.8:samtools/1.3:mbma/nextflow'
         
         input:
+        file R1 from R1Channel.toList()
+        file R2 from R2Channel.toList()
         file assembly from assemblyChannel
 
         output:
-        file("mapping/bam/*.bam") into bamChannel mode flatten
+        file("mapping/bam/Ech*.bam") into bamChannel mode flatten
+        file("mapping/bam/sorted*.bam") into sortedChannel
+        file("mapping/bam/sorted*.bam") into sortedChannel_2
+        file("mapping/bam/sorted*.bam") into sortedChannel_3
+        file("mapping/bam/sorted*.bam") into sortedChannel_4
         file("mapping/comptage/count_matrix.txt") into countChannel
 
         shell:
         """
         #!/bin/bash
-        mbma.py mapping -i !{cleanDir} -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t {params.cpusmapping} -q normal --bowtie2 --best -e !{params.email}
+        mbma.py mapping -o mapping -db !{params.bowt_index}/!{params.index_prefix} -t !{params.cpusmapping} -q normal --bowtie2 --best -e !{params.email} --r1 !{R1} --r2 !{R2} -p common
         bash !{params.scripts}/summarise_mapping_PE.sh mapping mapping/stats_mapping.tsv
-        rm -r mapping/sam
+        rm -r mapping/sam mapping/bam/filtered*
         cp -r mapping/ !{params.out}/
         """
     }
 
-    if( params.concoct != " " || params.cocacola != " " || params.groopm != " " || params.maxbin!= " " || params.metabat != " " || params.mycc != " " || params.all == "T" ) {
-        process sort_bam {
+    //~ if( params.concoct != " " || params.cocacola != " " || params.groopm != " " || params.maxbin!= " " || params.metabat != " " || params.mycc != " " || params.all == "T" ) {
+        
+        //~ process sort_bam {
 
-            cpus params.cpus
+            //~ cpus params.cpus
 
-            input:
-            file bam from bamChannel
+            //~ input:
+            //~ file bam from bamChannel
 
-            output:
-            file("*.sorted") into sortedChannel
-            file("*.sorted") into sortedChannel_2
-            file("*.sorted") into sortedChannel_3
-            file("*.sorted") into sortedChannel_4
+            //~ output:
+            //~ file("*.sorted") into sortedChannel
+            //~ file("*.sorted") into sortedChannel_2
+            //~ file("*.sorted") into sortedChannel_3
+            //~ file("*.sorted") into sortedChannel_4
 
-            shell:
-            """
-            samtools sort -o !{bam}.sorted -@ !{params.cpus} -O bam !{bam}
-            """
-        }
-    }
+            //~ shell:
+            //~ """
+            //~ samtools sort -o !{bam}.sorted -@ !{params.cpus} -O bam !{bam}
+            //~ """
+        //~ }
+    //~ }
 }
 else if ( params.bamDir != "" && params.count_matrix != "" && (params.concoct != " " || params.cocacola != " " || params.groopm != " " || params.maxbin!= " " || params.metabat != " " || params.mycc != " " || params.all == "T") ) {
 
-    bamChannel = Channel.fromPath("${params.bamDir}/*.bam").ifEmpty { exit 1, "Cannot find any bams in the directory : ${params.in}" }
+    bamChannel = Channel.fromPath("${params.bamDir}/Ech*.bam").ifEmpty { exit 1, "Cannot find any BAM files in the directory : ${params.bamDir}" }
+    sortedChannel = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in the directory : ${params.bamDir}" }
+    sortedChannel_2 = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in the directory : ${params.bamDir}" }
+    sortedChannel_3 = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in the directory : ${params.bamDir}" }
+    sortedChannel_4 = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in the directory : ${params.bamDir}" }
     countChannel = Channel.fromPath("${params.count_matrix}").ifEmpty { exit 1, "Cannot find the count_matrix in the directory : ${params.count_matrix}" }
 
-    process sort_bam {
+    //~ process sort_bam {
 
-        cpus params.cpus
+        //~ cpus params.cpus
 
-        input:
-        file bam from bamChannel
+        //~ input:
+        //~ file bam from bamChannel
 
-        output:
-        file("*.sorted") into sortedChannel
-        file("*.sorted") into sortedChannel_2
-        file("*.sorted") into sortedChannel_3
-        file("*.sorted") into sortedChannel_4
+        //~ output:
+        //~ file("*.sorted") into sortedChannel
+        //~ file("*.sorted") into sortedChannel_2
+        //~ file("*.sorted") into sortedChannel_3
+        //~ file("*.sorted") into sortedChannel_4
 
-        shell:
-        """
-        samtools sort -o !{bam}.sorted -@ !{params.cpus} -O bam !{bam}
-        """
-    }
+        //~ shell:
+        //~ """
+        //~ samtools sort -o !{bam}.sorted -@ !{params.cpus} -O bam !{bam}
+        //~ """
+    //~ }
 }
 else if( params.likelybin == " " && params.scimm ==  " " && params.metacluster5 == " " && params.mbbc == " " && params.canopy ==  " " && params.abundancebin == " " ) {
-    exit 1, "If no prefix for bowtie index is given you have to give the path to the bams directory and the count_matrix.txt file"
+    exit 1, "If the mapping of the reads on the contigs as already been done. You have to give the path to the BAM files directory and sorted BAM files and the path to the count_matrix.txt file"
 }
 
 if ( params.concoct != " " || params.cocacola != " " || params.groopm != " " || params.maxbin!= " " || params.all == "T" ) {
@@ -602,7 +638,7 @@ if ( params.concoct != " " || params.cocacola != " " || params.groopm != " " || 
         //~ cpus params.cpus
 
         input:
-        file sort_bam from sortedChannel_2
+        file sort_bam from sortedChannel
 
         output:
         file("*.bai") into indexedChannel
@@ -617,10 +653,11 @@ if ( params.concoct != " " || params.cocacola != " " || params.groopm != " " || 
 
 if( params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || params.all == "T" ) {
     
+    // generate converage files from the alignment files
     process gen_cov_bed {
         
         input:
-        file bam_sorted from sortedChannel_3
+        file bam_sorted from sortedChannel_2
         
         output:
         file("*.gcbout") into gen_cov_bedChannel
@@ -628,10 +665,11 @@ if( params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || pa
         shell:
         """
         bn=`echo !{bam_sorted} | cut -f1 -d "."`
-        genomeCoverageBed -ibam bam_sorted > \$bn.gcbout
+        genomeCoverageBed -ibam !{bam_sorted} > \$bn.gcbout
         """
     }
     
+    // make abundance tables based on the coverage files and link tables from alignment files
     process abun_and_link_profile {
 
         cpus params.cpus
@@ -640,7 +678,7 @@ if( params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || pa
         file bed_file from gen_cov_bedChannel.toList()
         file bam_idx from indexedChannel.toList()
         file assembly from assemblyChannel_2
-
+        
         output:
         file("covTable.tsv") into abundanceProfileChannel
         file("covTable.tsv") into abundanceProfileChannel_2
@@ -656,33 +694,34 @@ if( params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || pa
     }
 }
 
-if( params.metacluster5 != " " ) {
-    process fastq_to_fasta {
+//~ if( params.metacluster5 != " " ) {
+    //~ process fastq_to_fasta {
 
-        input:
-        file fastq from conv_fastqChannel.toList()
+        //~ input:
+        //~ file fastq from conv_fastqChannel.toList()
 
-        output:
-        file("merged.fa") into metaclustinputChannel
+        //~ output:
+        //~ file("merged.fa") into metaclustinputChannel
 
-        shell:
-        """
-        if [ `awk '{print NF; exit}' \$args` -gt 1 ];then
-            cat !{fastq} > merged.fastq
-            egrep "^@[a-z]+" -A 1 merged.fastq | sed -e 's/^@/>/' -e '/^--/d' > merged.fa
-        else
-            egrep "^@[a-z]+" -A 1 !{fastq} | sed -e 's/^@/>/' -e '/^--/d' > merged.fa
-        fi
-        """
-    }
-}
+        //~ shell:
+        //~ """
+        //~ if [ `awk '{print NF; exit}' \$args` -gt 1 ];then
+            //~ cat !{fastq} > merged.fastq
+            //~ egrep "^@[a-z]+" -A 1 merged.fastq | sed -e 's/^@/>/' -e '/^--/d' > merged.fa
+        //~ else
+            //~ egrep "^@[a-z]+" -A 1 !{fastq} | sed -e 's/^@/>/' -e '/^--/d' > merged.fa
+        //~ fi
+        //~ """
+    //~ }
+//~ }
 
 if( params.metabat != " " || params.mycc != " " || params.all == "T" ) {
-
+    
+    // make abundance file for metabat
     process jgi_summa_depths {
 
         input:
-        file bams from sortedChannel.toList()
+        file bams from sortedChannel_3.toList()
 
         output:
         file("depth.txt") into abunChannel
@@ -695,23 +734,23 @@ if( params.metabat != " " || params.mycc != " " || params.all == "T" ) {
     }
 }
 
-if( params.likelybin != " " ) {
+//~ if( params.likelybin != " " ) {
 
-    process LikelyBin {
+    //~ process LikelyBin {
 
-        input:
-        file assembly from assemblyChannel_10
+        //~ input:
+        //~ file assembly from assemblyChannel_10
 
-        output:
-        file("*") into likelybinChannel
+        //~ output:
+        //~ file("*") into likelybinChannel
 
-        shell:
-        """
-        perl !{params.tools}/likelybin-master/mcmc.pl !{assembly} -num_source=!{params.nb_cluster}
-        """
-    }
-}
-else { likelybinChannel = Channel.from("a") }
+        //~ shell:
+        //~ """
+        //~ perl !{params.tools}/likelybin-master/mcmc.pl !{assembly} -num_source=!{params.nb_cluster}
+        //~ """
+    //~ }
+//~ }
+//~ else { likelybinChannel = Channel.from("a") }
 
 if( params.scimm != " " || params.all == "T" ) {
     file(params.scimmDir).mkdirs()
@@ -935,7 +974,7 @@ if( params.concoct != " " || params.all == "T" ) {
 
     //~ process CONCOCT {
         //~ cpus params.cpus
-
+        
         //~ input:
         //~ file assembly from assemblyChannel_4
         //~ file abun_prof from abundanceProfileChannel
@@ -971,7 +1010,7 @@ if( params.cocacola != " " || params.all == "T" ) {
 
     //~ process COCACOLA {
         //~~ cpus params.cpus
-
+        
         //~ input:
         //~ file abun_table from abundanceProfileChannel_2
         //~ file link from linkageChannel_2
@@ -1029,6 +1068,7 @@ else {
     myccChannel_3 = Channel.from("a")
 }
 
+// evaluate the quality of the bins generated by the chosen binning softwares
 process checkm {
     cpus params.cpus
     memory "100G"
