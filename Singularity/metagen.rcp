@@ -1,0 +1,21 @@
+Boostrap: docker
+From: ubuntu:16.04
+
+%post
+    mkdir /pasteur
+    apt update
+    apt install -y wget build-essential python2.7
+    wget https://cran.r-project.org/bin/linux/ubuntu/xenial/r-base-core_3.2.5-1xenial_amd64.deb
+    apt install ./r-base-core_3.2.5-1xenial_amd64.deb
+    
+    R
+    packages = c("Rcpp", "MASS", "mixtools", "doParallel", "foreach", "seqinr", "getopt")
+    for (i in 1:length(packages)){
+        install.packages(packages[i], dependencies=T, repo="http://mirror.ibcp.fr/pub/CRAN/")
+    }
+    quit(save="no")
+    
+    wget https://github.com/BioAlgs/MetaGen/archive/master.zip
+    unzip master.zip
+    rm master.zip
+    mv MetaGen-master /home/

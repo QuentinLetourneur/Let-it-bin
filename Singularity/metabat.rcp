@@ -1,0 +1,12 @@
+Boostrap: docker
+From: ubuntu:16.04
+
+%post
+    mkdir /pasteur
+    apt update
+    apt install -y wget python
+    wget https://bitbucket.org/berkeleylab/metabat/downloads/metabat-static-binary-linux-x64_v2.12.1.tar.gz
+    tar -xzf metabat-static-binary-linux-x64_v2.12.1.tar.gz
+    rm metabat-static-binary-linux-x64_v2.12.1.tar.gz
+    chmod +x metabat/*
+    mv metabat/* /usr/local/bin

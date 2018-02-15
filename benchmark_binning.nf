@@ -1098,9 +1098,9 @@ if( params.metabat != " " || params.all == "T" ) {
         shell:
         """
         if [ !{params.min_contig_length} -le 1500 ];then
-            !{params.tools}/metabat/metabat -i !{assembly} -a depth.txt -o bin -t !{params.cpus} --minSamples 5
+            !{params.tools}/metabat/metabat1 -i !{assembly} -a depth.txt -o bin -t !{params.cpus} --minSamples 5
         else
-            !{params.tools}/metabat/metabat -i !{assembly} -a depth.txt -o bin -t !{params.cpus} --minSamples 5 -m !{params.min_contig_length}
+            !{params.tools}/metabat/metabat1 -i !{assembly} -a depth.txt -o bin -t !{params.cpus} --minSamples 5 -m !{params.min_contig_length}
         fi
         """
     }
@@ -1458,63 +1458,64 @@ if( params.lcs != "" ) {
         //fasta_bn = fasta.baseName
         """
         #!/bin/bash
-        for infile in ${nt};do
-            tax_count=`wc -l < \$infile`
-            if [ "\$tax_count" -gt "0" ]; then
-                bin_name=`echo \$infile | egrep -o "bin.[0-9]+"`
-                ${params.scripts}/ExtractAnnotation.py -f \$infile -a ${params.lcs} -o \$bin_name"_annotation.txt" -nb 1 -r . -fc ${params.coverage} -fi ${params.identity}
-            fi
-        done
+        # Annot ncbi
+        #fasta_bn=`echo \$infile | cut -f 1,2 -d "." | cut -f 1 -d "_"`
+        python ${params.scripts}/get_taxonomy.py -i \$infile \
+                -o \$fasta_bn"_taxonomy.txt" -t ${params.gitaxidnucl} \
+                -n ${params.names} -d ${params.nodes}
+        python ${params.scripts}/ExtractNCBIDB.py \
+                -f \$infile -g \$fasta_bn"_taxonomy.txt" -fc ${params.coverage} \
+                -o \$fasta_bn"_annotation.txt" -nb 1
+        # Interest column for krona
+        cut -s -f 3-10 \$fasta_bn"_annotation.txt" > \$fasta_bn"_annotation_interest.txt"
+        count_reads=\$(grep "^>" -c \$fasta_bn.fa)
+    
+        # Get sequence not annotated
+        if [ -f \$fasta_bn"_catalogue_annotation.txt" ]; then
+            cat  \$fasta_bn"_annotation.txt" \$fasta_bn"_catalogue_annotation.txt"\
+             > annotated
+            python ${params.scripts}/extract_fasta.py -q annotated \
+                -t \$fasta_bn.fa -n -o \$fasta_bn"_not_annotated.fasta"
+        else
+            python ${params.scripts}/extract_fasta.py \
+                -q \$fasta_bn"_annotation.txt" -t \$fasta_bn.fa -n \
+                -o \$fasta_bn"_not_annotated.fasta"
+        fi
+        
+        
+        # Create Krona annotation
+        while read line; do
+            echo -e "1\t\${line}"
+        done < \$fasta_bn"_annotation_interest.txt" > \$fasta_bn"_krona.txt"
+        annot=`wc -l \$fasta_bn"_krona.txt" | cut -f 1 -d ' '`
+        #echo "\$count_reads" > log.txt
+        #echo "\$annot" >>log.txt
+        # Count not annoted elements
+        if [ "\$count_reads" -gt "\$annot" ]; then
+            val=\$(( count_reads - annot))
+            
+            echo -e "\$val\tNA\tNA\tNA\tNA\tNA\tNA\tNA" >> \$fasta_bn"_krona.txt"
+        fi
+        else
+            cat \$fasta_bn.fa > \$fasta_bn"_not_annotated.fasta"
+            touch \$fasta_bn"_krona.txt" \$fasta_bn"_annotation.txt"
+            
+        cp *_krona.txt ${params.binDir}/${soft}/Annotation
+        cp *_not_annotated.fasta ${params.binDir}/${soft}/Annotation
+        cp *_taxonomy.txt ${params.binDir}/${soft}/Annotation
+        cp *_annotation.txt ${params.binDir}/${soft}/Annotation
         
         cp *_annotation.txt ${params.binDir}/${soft}/Annotation
         """
         
-        //~ # Annot ncbi
-        //~ #fasta_bn=`echo \$infile | cut -f 1,2 -d "." | cut -f 1 -d "_"`
-        //~ python ${params.scripts}/get_taxonomy.py -i \$infile \
-                //~ -o \$fasta_bn"_taxonomy.txt" -t ${params.gitaxidnucl} \
-                //~ -n ${params.names} -d ${params.nodes}
-        //~ python ${params.scripts}/ExtractNCBIDB.py \
-                //~ -f \$infile -g \$fasta_bn"_taxonomy.txt" -fc ${params.coverage} \
-                //~ -o \$fasta_bn"_annotation.txt" -nb 1
-        //~ # Interest column for krona
-        //~ cut -s -f 3-10 \$fasta_bn"_annotation.txt" > \$fasta_bn"_annotation_interest.txt"
-        //~ count_reads=\$(grep "^>" -c \$fasta_bn.fa)
-    
-        //~ # Get sequence not annotated
-        //~ if [ -f \$fasta_bn"_catalogue_annotation.txt" ]; then
-            //~ cat  \$fasta_bn"_annotation.txt" \$fasta_bn"_catalogue_annotation.txt"\
-             //~ > annotated
-            //~ python ${params.scripts}/extract_fasta.py -q annotated \
-                //~ -t \$fasta_bn.fa -n -o \$fasta_bn"_not_annotated.fasta"
-        //~ else
-            //~ python ${params.scripts}/extract_fasta.py \
-                //~ -q \$fasta_bn"_annotation.txt" -t \$fasta_bn.fa -n \
-                //~ -o \$fasta_bn"_not_annotated.fasta"
-        //~ fi
-        
-        
-        //~ # Create Krona annotation
-        //~ while read line; do
-            //~ echo -e "1\t\${line}"
-        //~ done < \$fasta_bn"_annotation_interest.txt" > \$fasta_bn"_krona.txt"
-        //~ annot=`wc -l \$fasta_bn"_krona.txt" | cut -f 1 -d ' '`
-        //~ #echo "\$count_reads" > log.txt
-        //~ #echo "\$annot" >>log.txt
-        //~ # Count not annoted elements
-        //~ if [ "\$count_reads" -gt "\$annot" ]; then
-            //~ val=\$(( count_reads - annot))
-            
-            //~ echo -e "\$val\tNA\tNA\tNA\tNA\tNA\tNA\tNA" >> \$fasta_bn"_krona.txt"
-        //~ fi
-        //~ else
-            //~ cat \$fasta_bn.fa > \$fasta_bn"_not_annotated.fasta"
-            //~ touch \$fasta_bn"_krona.txt" \$fasta_bn"_annotation.txt"
-            
-        //~ cp *_krona.txt ${params.binDir}/${soft}/Annotation
-        //~ cp *_not_annotated.fasta ${params.binDir}/${soft}/Annotation
-        //~ cp *_taxonomy.txt ${params.binDir}/${soft}/Annotation
-        //~ cp *_annotation.txt ${params.binDir}/${soft}/Annotation
+
+        //~ for infile in ${nt};do
+            //~ tax_count=`wc -l < \$infile`
+            //~ if [ "\$tax_count" -gt "0" ]; then
+                //~ bin_name=`echo \$infile | egrep -o "bin.[0-9]+"`
+                //~ ${params.scripts}/ExtractAnnotation.py -f \$infile -a ${params.lcs} -o \$bin_name"_annotation.txt" -nb 1 -r . -fc ${params.coverage} -fi ${params.identity}
+            //~ fi
+        //~ done
     }
 }
 else {

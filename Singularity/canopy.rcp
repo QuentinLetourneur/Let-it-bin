@@ -1,0 +1,12 @@
+Boostrap: docker
+From: ubuntu:16.04
+
+%post
+    mkdir /pasteur
+    apt update
+    apt install -y wget zip libboost-dev libboost-program-options-dev python gawk
+    wget https://bitbucket.org/HeyHo/mgs-canopy-algorithm/get/d55ed1a8b825.zip
+    unzip d55ed1a8b825.zip
+    cd HeyHo-mgs-canopy-algorithm-d55ed1a8b825/src/
+    make -f Makefile
+    mv * /usr/local/bin
