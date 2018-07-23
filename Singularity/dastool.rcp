@@ -35,6 +35,11 @@ From: ubuntu:16.04
     make install
     cd ..
     
+    wget ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.2.31/ncbi-blast-2.2.31+-x64-linux.tar.gz
+    tar -xzf ncbi-blast-2.2.31+-x64-linux.tar.gz
+    rm ncbi-blast-2.2.31+-x64-linux.tar.gz
+    mv ncbi-blast-2.2.31+/bin/* /usr/local/bin
+    
     wget https://github.com/cmks/DAS_Tool/archive/1.1.0.zip
     unzip 1.1.0.zip
     rm 1.1.0.zip
