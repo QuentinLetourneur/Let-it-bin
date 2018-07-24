@@ -32,7 +32,7 @@ workflow.onError {
 params.help=false
 
 def usage() {
-    println("\nLet-it-bin has been developped to analyse metagenomic short paired-end reads data from multiple samples\nIt can be used on simulated data to benchmark binners performance or real data where binning results will only be evaluated by a reference free approach.\nThe pipeline consist in 4 major steps, reads preprocessing, assembly, binning and evaluation.\nThe pipeline can be started from the second or third step if the previous ones have already been computed by adding arguments to the command line.")
+    println("\nLet-it-bin has been developped to analyse metagenomic short paired-end reads data from multiple samples\nIt can be used on simulated data to benchmark binners performance or real data where binning results will only be evaluated by a reference free approach.\nThe pipeline consist in 4 major steps, reads preprocessing, assembly, binning and evaluation.\nThe pipeline can be started from the second or third step by adding arguments to the command line, provided that you have the needed inputs.")
     println("You have to select the binning softwares that will run in the following list :\n  binsanity, canopy, concoct, cocacola, maxbin, metabat, metabat2, metagen\nYou just have to prefix the name of the wanted programms with '--' (Ex : --concoct).\nIf you want to use them all set the --all option to T\n\nFor the following arguments if no default is given the argument is mandatory\nWhen path are needed please give full path. For directories don't place a '/' at the end of the path\n")
     println("    GENERAL ARGUMENTS :\n")
     println("  --reads [PATH] Directory containing unzipped paired reads files.\nOnly needed if you start from raw reads or reads from which contaminant have been removed")
@@ -43,7 +43,6 @@ def usage() {
     println("  --min_contigs_length [INT] Minimum contigs length in base to be passed to binning programms (Default 1000)")
     println("  --nb_ref [INT] If you use simulated data specify the number of genomes present")
     println("  --dastool [CHAR] Can be either T (Default) or F. If you use multiple binning softwares you can use dastool to try to extract best bins corresponding to the same microorganism from their results.")
-    println("  --scripts [PATH] Path to the directory containing scripts needed by the pipeline")
     println("  --tmp_checkm [PATH] Path to the directory were will be stored CheckM temp files. The total path souhldn't exeed 65 chars")
     println("  --help Print the help message")
     println("\n    READS PREPROCESSING :\n")
@@ -126,7 +125,6 @@ params.gitaxidnucl = "/local/databases/release/taxodb/gi_taxid_nucl.dmp"
 params.names = "/local/databases/release/taxodb/names.dmp"
 params.nodes = "/local/databases/release/taxodb/nodes.dmp"
 params.hit = 10
-params.catalogue = "/pasteur/projets/policy01/Biomics/metagenomics/catalogue/metabat_bin.fa"
 params.nb_cluster = ""
 params.metabat = " "
 params.concoct = " "
@@ -151,12 +149,10 @@ params.metabat2Dir = "${params.binDir}/Metabat2"
 params.multi_assembly = "F"
 params.contigs = ""
 params.count_matrix = ""
-params.scripts = "/pasteur/projets/policy01/BioIT/quentin/scripts"
 params.interleaved = ""
 params.refs_info = ""
 params.link_ref_id_species = "" // take the absolute path to the file containing the link between reference genome IDs and species name
 params.blast_db = ""
-params.tools = "/pasteur/projets/policy01/BioIT/quentin/tools"
 params.tmp_checkm = "/pasteur/scratch/amine/tmp_chkm"
 params.min_bin_size = 500000
 params.conta_threshold = 0.1 // at max 10% contamination
@@ -480,10 +476,10 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             
             # Annot ncbi
             fasta_bn=`echo \$infile | cut -f 1,2 -d "." | cut -f 1 -d "_"`
-            python !{params.scripts}/get_taxonomy.py -i !{assembly} \
+            python get_taxonomy.py -i !{assembly} \
                     -o \$fasta_bn"_taxonomy.txt" -t !{params.gitaxidnucl} \
                     -n !{params.names} -d !{params.nodes}
-            python !{params.scripts}/ExtractNCBIDB.py \
+            python ExtractNCBIDB.py \
                     -f !{assembly} -g \$fasta_bn"_taxonomy.txt" -fc !{params.coverage} \
                     -o \$fasta_bn"_annotation.txt" -nb 1 -fi
             
@@ -491,10 +487,10 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             if [ -f \$fasta_bn"_catalogue_annotation.txt" ]; then
                 cat  \$fasta_bn"_annotation.txt" \$fasta_bn"_catalogue_annotation.txt"\
                  > annotated
-                python ${params.scripts}/extract_fasta.py -q annotated \
+                python extract_fasta.py -q annotated \
                     -t \$fasta_bn.fa -n -o \$fasta_bn"_not_annotated.fasta"
             else
-                python ${params.scripts}/extract_fasta.py \
+                python extract_fasta.py \
                     -q \$fasta_bn"_annotation.txt" -t \$fasta_bn.fa -n \
                     -o \$fasta_bn"_not_annotated.fasta"
             fi
@@ -675,7 +671,7 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         shell:
         """
         cat !{contigs} > cata_contigs.fasta
-        !{params.tools}/cdhit-master/cd-hit-est -i cata_contigs.fasta -o cata_contig_nr.fasta -c 0.95 -T !{params.cpus} -aS 0.9 -d 0 -g 1 -M 0
+        cd-hit-est -i cata_contigs.fasta -o cata_contig_nr.fasta -c 0.95 -T !{params.cpus} -aS 0.9 -d 0 -g 1 -M 0
         """
     }
 }
@@ -860,13 +856,12 @@ if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (!
         echo "Elapsed time : \$(timer \$start_time_count)"
         echo "Total duration :  \$(timer \$start_time)"
             
-        rm sam/*.sam
         rm bam/filtered*
         find ./bam -maxdepth 1 -type f ! -iname sorted*.bam -delete
         cp bam/* !{params.out}/mapping/bam/
         cp out/* !{params.out}/mapping/out/
         cp comptage/* !{params.out}/mapping/comptage/
-        cp unmmapped/* !{params.out}/mapping/unmapped/
+        cp unmapped/* !{params.out}/mapping/unmapped/
         """
     }
 }
@@ -931,7 +926,6 @@ else if( file("${params.bamDir}/*.bam").size != params.nb_samples && params.inde
         echo "Elapsed time : \$(timer \$start_time_count)"
         echo "Total duration :  \$(timer \$start_time)"
             
-        rm -r sam/
         rm bam/filtered*
         find ./bam -maxdepth 1 -type f ! -iname sorted*.bam -delete
         cp bam/* !{params.out}/mapping/bam/
@@ -1089,43 +1083,43 @@ if( params.metabat != " " || params.metabat2 != " " || params.all == "T" ) {
     }
 }
 
-if( params.scimm != " " ) {
-    file(params.scimmDir).mkdirs()
-    
-    process SCIMM {
-        cpus params.cpubinning
-        
-        input:
-        file assembly from assemblyChannel_9
-        set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel
-        
-        output:
-        set val("SCIMM"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into scimmChannel
-        val("a") into scimmChannel_2
-        val("SCIMM") into scimmChannel_3
-        
-        shell:
-        """
-        samtools faidx !{assembly}
-        cut -f1-2 !{assembly}.fai > contigs_length.tsv
-        awk -v min_size=!{params.min_contig_length} '\$2 >= min_size {print \$1}' > headers_contigs_gt1000.txt
-        !{params.script}/extract_fasta_from_list.py !{assembly} headers_contigs_gt1000.txt assembly_gt1000.fasta
-        
-        python !{params.tools}/scimm/bin/scimm.py -s assembly_gt1000.fasta -k !{params.nb_cluster} -p !{params.cpubinning} --cs 0 --lt !{params.cpubinning}
-        
-        for file in `ls cluster*.fa`;do
-            name=`echo \$file | sed -e 's/cluster/bin/' -e 's/-/./'`
-            mv \$file \$name
-        done
-        cp bin*.fa !{params.scimmDir}
-        """
-    }
-}
-else {
-    scimmChannel = Channel.empty()
-    scimmChannel_2 = Channel.from("a")
-    scimmChannel_3 = Channel.empty()
-}
+// if( params.scimm != " " ) {
+//     file(params.scimmDir).mkdirs()
+//
+//     process SCIMM {
+//         cpus params.cpubinning
+//
+//         input:
+//         file assembly from assemblyChannel_9
+//         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel
+//
+//         output:
+//         set val("SCIMM"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into scimmChannel
+//         val("a") into scimmChannel_2
+//         val("SCIMM") into scimmChannel_3
+//
+//         shell:
+//         """
+//         samtools faidx !{assembly}
+//         cut -f1-2 !{assembly}.fai > contigs_length.tsv
+//         awk -v min_size=!{params.min_contig_length} '\$2 >= min_size {print \$1}' > headers_contigs_gt1000.txt
+//         extract_fasta_from_list.py !{assembly} headers_contigs_gt1000.txt assembly_gt1000.fasta
+//
+//         python !{params.tools}/scimm/bin/scimm.py -s assembly_gt1000.fasta -k !{params.nb_cluster} -p !{params.cpubinning} --cs 0 --lt !{params.cpubinning}
+//
+//         for file in `ls cluster*.fa`;do
+//             name=`echo \$file | sed -e 's/cluster/bin/' -e 's/-/./'`
+//             mv \$file \$name
+//         done
+//         cp bin*.fa !{params.scimmDir}
+//         """
+//     }
+// }
+// else {
+//     scimmChannel = Channel.empty()
+//     scimmChannel_2 = Channel.from("a")
+//     scimmChannel_3 = Channel.empty()
+// }
 
 if( params.canopy != " " || params.all == "T" ) {
     file(params.canopyDir).mkdirs()
@@ -1500,7 +1494,6 @@ if( params.binsanity != " " || params.all == "T" ) {
         
         cp *.fa !{params.binsanityDir}
         """
-        //~ python !{params.tools}/BinSanity-master/bin/Binsanity-refine -f "" -c matrix.cov -l !{assembly} -o . -x !{params.min_contig_length}
     }
 }
 else {
