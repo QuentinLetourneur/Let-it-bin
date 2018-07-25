@@ -32,25 +32,25 @@ workflow.onError {
 params.help=false
 
 def usage() {
-    println("\nLet-it-bin has been developped to analyse metagenomic short paired-end reads data from multiple samples\nIt can be used on simulated data to benchmark binners performance or real data where binning results will only be evaluated by a reference free approach.\nThe pipeline consist in 4 major steps, reads preprocessing, assembly, binning and evaluation.\nThe pipeline can be started from the second or third step by adding arguments to the command line, provided that you have the needed inputs.")
-    println("You have to select the binning softwares that will run in the following list :\n  binsanity, canopy, concoct, cocacola, maxbin, metabat, metabat2, metagen\nYou just have to prefix the name of the wanted programms with '--' (Ex : --concoct).\nIf you want to use them all set the --all option to T\n\nFor the following arguments if no default is given the argument is mandatory\nWhen path are needed please give full path. For directories don't place a '/' at the end of the path\n")
+    println("\nLet-it-bin has been developped to analyse metagenomic short paired-end reads data from multiple samples\nIt can be used on simulated data to benchmark binners performance or real data where binning results will only be evaluated by a reference free approach.\nThe pipeline take raw paired-end reads from multiple samples as primary input (the pairs names MUST finish with _{1,2}.fq/fastq). It comprise 4 major steps, reads preprocessing, assembly, binning and evaluation.\nThe pipeline can be started from the second or third step by adding arguments to the command line, provided that you have the needed inputs.")
+    println("You have to select the binning softwares that will run in the following list :\n  binsanity, canopy, concoct, cocacola, maxbin, metabat, metabat2 and metagen\nYou just have to prefix the name of the wanted programms with '--' (Ex : --concoct).\nIf you want to use them all just use --all T\n\nWhen path are needed please give full path. For directories don't place a trailing '/' \n")
     println("    GENERAL ARGUMENTS :\n")
     println("  --reads [PATH] Directory containing unzipped paired reads files.\nOnly needed if you start from raw reads or reads from which contaminant have been removed")
     println("  --nb_samples [INT] Number of samples you are using")
     println("  --out [PATH] Directory were will be stored the results of the pipeline")
-    println("  --sim_data [CHAR] Can be either T (Default) or F. Will change the execution of the pipeline depending on the analysed data are simulated and have references or data without prior knowledge on them.")
+    println("  --sim_data [CHAR] Can be either T (Default) or F. Will change the execution of the pipeline depending on the analysed data (simulated or not).")
     println("  --cpus [INT] Number of cpus used for task with multiprocessing (Default 4)")
     println("  --min_contigs_length [INT] Minimum contigs length in base to be passed to binning programms (Default 1000)")
-    println("  --nb_ref [INT] If you use simulated data specify the number of genomes present")
-    println("  --dastool [CHAR] Can be either T (Default) or F. If you use multiple binning softwares you can use dastool to try to extract best bins corresponding to the same microorganism from their results.")
-    println("  --tmp_checkm [PATH] Path to the directory were will be stored CheckM temp files. The total path souhldn't exeed 65 chars")
+    println("  --nb_ref [INT] If you use simulated data specify the total number of different genomes present in the samples")
+    println("  --dastool [CHAR] Can be either T (Default) or F. If you use multiple binning softwares you can use dastool to combine these results and try to extract best bins corresponding to the same microorganism.")
+    println("  --tmp_checkm [PATH] Path to the directory were will be stored CheckM temporary files. The path length souhldn't exeed 65 chars")
     println("  --help Print the help message")
     println("\n    READS PREPROCESSING :\n")
-    println("  --contaminant [PATH] Path and prefix of bowtie2 index files of contaminant sequences (HAVE TO be computed before lauching the pipeline)")
+    println("  --contaminant [PATH] Path and prefix of the bowtie2 index files of contaminant sequences (HAVE TO be computed before lauching the pipeline)")
     println("  --minlength [INT] Minimum length for trimed contigs (Default 45)")
     println("  --alienseq [PATH] Fasta file containing adaptaters sequence for AlienTrimmer")
     println("  --cleaned_readsDir [PATH] Folder were will be stored reads that have been filtered to eliminate contaminant and trimmed (Default [out]/cleaned_reads)\nIf there are already fastq files in the folder it will take it as input for khmer and skip the cleaning step")
-    println("  --filt_readsDir [PATH] Path to the directory containing Khmer results.\nIF SPECIFIED will skeep the khmer step.")
+    println("  --filt_readsDir [PATH] Path to the directory containing Khmer results.\nIF SPECIFIED the workflow will start at the assembly by taking as input the fasta files in the directory.")
     println("\n    ASSEMBLY :\n")
     println("  --cpuassembly [INT] Number of cpus used for assembly of the reads (Default 10)")
     println("  --memassembly [INT] Quantity of RAM in Mb used for assembly of the reads. Default 160000 Mb with 2 retries with number of retry * 160000\nIf you change this value no retry will be done")
@@ -131,7 +131,6 @@ params.concoct = " "
 params.cocacola = " "
 params.maxbin = " "
 params.canopy = " "
-params.scimm = " "
 params.likelybin = " "
 params.metagen = " "
 params.binsanity = " "
@@ -142,7 +141,6 @@ params.concoctDir = "${params.binDir}/Concoct"
 params.cocacolaDir = "${params.binDir}/Cocacola"
 params.maxbinDir = "${params.binDir}/MaxBin"
 params.canopyDir = "${params.binDir}/Canopy"
-params.scimmDir = "${params.binDir}/SCIMM"
 params.metagenDir = "${params.binDir}/MetaGen"
 params.binsanityDir = "${params.binDir}/BinSanity-wf"
 params.metabat2Dir = "${params.binDir}/Metabat2"
@@ -238,7 +236,7 @@ if( params.contaminant != "" && params.reads != " ") {
     skiptrim = 'F'
 
 }
-else if( file("${params.cleaned_readsDir}/*.f*q").size == 0 && params.reads != " " ) {
+else if( file("${params.cleaned_readsDir}/*.f*q").size < params.nb_samples && params.reads != " " ) {
 
     readChannel = Channel.fromFilePairs("${params.reads}/*{1,2}.{fastq,fq}")
                  .ifEmpty { exit 1, "Cannot find any reads matching: ${params.reads}" }
@@ -1083,44 +1081,6 @@ if( params.metabat != " " || params.metabat2 != " " || params.all == "T" ) {
     }
 }
 
-// if( params.scimm != " " ) {
-//     file(params.scimmDir).mkdirs()
-//
-//     process SCIMM {
-//         cpus params.cpubinning
-//
-//         input:
-//         file assembly from assemblyChannel_9
-//         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel
-//
-//         output:
-//         set val("SCIMM"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into scimmChannel
-//         val("a") into scimmChannel_2
-//         val("SCIMM") into scimmChannel_3
-//
-//         shell:
-//         """
-//         samtools faidx !{assembly}
-//         cut -f1-2 !{assembly}.fai > contigs_length.tsv
-//         awk -v min_size=!{params.min_contig_length} '\$2 >= min_size {print \$1}' > headers_contigs_gt1000.txt
-//         extract_fasta_from_list.py !{assembly} headers_contigs_gt1000.txt assembly_gt1000.fasta
-//
-//         python !{params.tools}/scimm/bin/scimm.py -s assembly_gt1000.fasta -k !{params.nb_cluster} -p !{params.cpubinning} --cs 0 --lt !{params.cpubinning}
-//
-//         for file in `ls cluster*.fa`;do
-//             name=`echo \$file | sed -e 's/cluster/bin/' -e 's/-/./'`
-//             mv \$file \$name
-//         done
-//         cp bin*.fa !{params.scimmDir}
-//         """
-//     }
-// }
-// else {
-//     scimmChannel = Channel.empty()
-//     scimmChannel_2 = Channel.from("a")
-//     scimmChannel_3 = Channel.empty()
-// }
-
 if( params.canopy != " " || params.all == "T" ) {
     file(params.canopyDir).mkdirs()
     
@@ -1548,7 +1508,7 @@ else {
     dastoolChannel_2 = Channel.empty()
 }
 
-checkmInputChannel = canopyChannel_3.mix(scimmChannel_3, maxbinChannel_3, metabatChannel_3, metagenChannel_3, metabat2Channel_3, binsanityChannel_3, concoctChannel_3, cocacolaChannel_3, dastoolChannel_2)
+checkmInputChannel = canopyChannel_3.mix(maxbinChannel_3, metabatChannel_3, metagenChannel_3, metabat2Channel_3, binsanityChannel_3, concoctChannel_3, cocacolaChannel_3, dastoolChannel_2)
 
 // evaluate the quality of the bins generated by the chosen binning softwares
 process checkm {
@@ -1585,7 +1545,7 @@ process checkm {
 
 if( params.sim_data == "T" ) {
     
-    AnnotInputChannel = canopyChannel.mix(scimmChannel, maxbinChannel, metabatChannel, metagenChannel, metabat2Channel, binsanityChannel , concoctChannel, cocacolaChannel, dastoolChannel)
+    AnnotInputChannel = canopyChannel.mix(maxbinChannel, metabatChannel, metagenChannel, metabat2Channel, binsanityChannel , concoctChannel, cocacolaChannel, dastoolChannel)
     
     process annotation_by_bin {
         
