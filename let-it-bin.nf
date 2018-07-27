@@ -43,22 +43,22 @@ def usage() {
     println("  --min_contigs_length [INT] Minimum contigs length in base to be passed to binning programms (Default 1000)")
     println("  --nb_ref [INT] If you use simulated data specify the total number of different genomes present in the samples")
     println("  --dastool [CHAR] Can be either T (Default) or F. If you use multiple binning softwares you can use dastool to combine these results and try to extract best bins corresponding to the same microorganism.")
-    println("  --tmp_checkm [PATH] Path to the directory were will be stored CheckM temporary files. The path length souhldn't exeed 65 chars")
+    println("  --tmp_checkm [PATH] Directory were will be stored CheckM temporary files. The path length souhldn't exeed 65 chars")
     println("  --help Print the help message")
     println("\n    READS PREPROCESSING :\n")
     println("  --contaminant [PATH] Path and prefix of the bowtie2 index files of contaminant sequences (HAVE TO be computed before lauching the pipeline)")
     println("  --minlength [INT] Minimum length for trimed contigs (Default 45)")
     println("  --alienseq [PATH] Fasta file containing adaptaters sequence for AlienTrimmer")
     println("  --cleaned_readsDir [PATH] Folder were will be stored reads that have been filtered to eliminate contaminant and trimmed (Default [out]/cleaned_reads)\nIf there are already fastq files in the folder it will take it as input for khmer and skip the cleaning step")
-    println("  --filt_readsDir [PATH] Path to the directory containing Khmer results.\nIF SPECIFIED the workflow will start at the assembly by taking as input the fasta files in the directory.")
+    println("  --filt_readsDir [PATH] Directory containing Khmer results.\nIF SPECIFIED the workflow will start at the assembly by taking as input the filtered fastq files in the directory.")
     println("\n    ASSEMBLY :\n")
-    println("  --cpuassembly [INT] Number of cpus used for assembly of the reads (Default 10)")
-    println("  --memassembly [INT] Quantity of RAM in Mb used for assembly of the reads. Default 160000 Mb with 2 retries with number of retry * 160000\nIf you change this value no retry will be done")
-    println("  --qos_assembly [STRING] If you run the pipeline on a cluster with SLURM for the asssembly step you can specify the queue to use : fast, normal (Default) or long (on TARS you can only use 5 cpus in this mode)")
+    println("  --cpuassembly [INT] Number of cpus used for reads assembly (Default 10)")
+    println("  --memassembly [INT] Quantity of RAM in Mb used for reads assembly. Default 160000 Mb with 2 retries. If the wanted memory is <= 160000, the allocated memory will grow according to the following formula : number of retry * [memmapping]\nElse no retry will be done")
+    println("  --qos_assembly [STRING] If you run the pipeline on a cluster with SLURM you can specify the queue of submision (qos) to use : fast, normal (Default) or long (on TARS you can only use 5 cpus in long)")
     println("  --mode [STRING] Name of the assembler to be used. Can be either spades (Default), clc, megahit or ray")
     println("  --multi_assembly [CHAR] By default a co-assembly of the samples is done. If you want to change that behaviour and do an assembly by sample set this parameter to T (Default F). The generated contigs will then be pulled in one file and filtered to lessen the redundancy but eliminating it is hard so there migth still be redundancy in the filtered contigs")
     println("  --contigs [PATH] If the assembly has already been done you can specify the path to the fasta file containing contigs. If provided the assembly steps will be skipped")
-    println("  --refs_info [PATH] If you use a simulated dataset and specify the --contigs option. Give the path to the sum_contigs_length_per_annotation.tsv file")
+    println("  --refs_info [PATH] If you use a simulated dataset and specify the --contigs option. Give the path to the sum_contigs_length_per_annotation.tsv file contained in [out]/assembly/")
     println("\n    CONTIGS ANNOTATION :\n")
     println("  --blast_db [PATH] If you use simulated data. Path to the BLAST database containing reference sequences (HAVE TO be computed before running the pipeline)")
     println("  --coverage [INT] Coverage threshold used to filter alignments of contigs on reference genomes or a public database (Default 90)")
@@ -67,7 +67,7 @@ def usage() {
     println("  --evalue [INT] E-value used for BLAST (Default 10)")
     println("  --hit [INT] Maximum number of hits for each querry in the BLAST output (Default 10)")
     println("  --link_ref_id_species [PATH] For simulated dataset tab-delimited file containing contigs IDs of reference sequence and the species to which they belong. Used to identify the target in the BLAST of contigs against the references")
-    println("  --contigs_annotation [PATH] If you use simulated data and have specified the --contigs option specify the path to the bh_blast_contigs_on_refs.tsv file")
+    println("  --contigs_annotation [PATH] If you use simulated data and have specified the --contigs option specify the path to the (bh_blast_contigs_on_refs.tsv)(to be updated) file in [out]/assembly/")
     println("\n    MAPPING :\n")
     println("  --cpumapping [INT] Number of cpus used for mapping reads on the assembly (Default 4)\n  One mapping per sample")
     println("  --memmapping [INT] Quantity of RAM in Mb for the mapping of each sample (Default 5000 )")
@@ -346,7 +346,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         
         if(params.mode != "ray") {
             cpus params.cpuassembly
-            if(params.memassembly == '160000') {
+            if(params.memassembly <= '160000') {
                 errorStrategy { task.exitStatus == 143 ? 'retry' : 'terminate' }
                 maxRetries 2
                 memory { params.memassembly * task.attempt }
@@ -674,73 +674,66 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
     }
 }
 else {
-    assemblyChannel = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_2 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_3 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_4 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_5 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_6 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_7 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_8 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_9 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_10 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_11 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_12 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
-    assemblyChannel_13 = Channel.fromPath("${params.contigs}")
-                     .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
+    if( file("${params.contigs}").isFile() ) {
+        assemblyChannel = Channel.fromPath("${params.contigs}")
+                         .ifEmpty { exit 1, "Cannot find the contigs file : ${params.contigs}" }
+        assemblyChannel_2 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_3 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_4 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_5 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_6 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_7 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_8 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_9 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_10 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_11 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_12 = Channel.fromPath("${params.contigs}")
+        assemblyChannel_13 = Channel.fromPath("${params.contigs}")
+    else {
+        exit 1, "${params.contigs} is not a file"
+    }
     
     if( params.sim_data == "T" ) {
-        annotationChannel = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel = annot_by_ref_infosChannel.concat(annotationChannel).collect()
-        
-        annotationChannel_2 = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel_2 = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel_2 = annot_by_ref_infosChannel_2.concat(annotationChannel_2).collect()
-        
-        annotationChannel_3 = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel_3 = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel_3 = annot_by_ref_infosChannel_3.concat(annotationChannel_3).collect()
-        
-        annotationChannel_4 = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel_4 = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel_4 = annot_by_ref_infosChannel_4.concat(annotationChannel_4).collect()
-        
-        annotationChannel_5 = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel_5 = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel_5 = annot_by_ref_infosChannel_5.concat(annotationChannel_5).collect()
-        
-        annotationChannel_6 = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel_6 = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel_6 = annot_by_ref_infosChannel_6.concat(annotationChannel_6).collect()
-        
-        annotationChannel_7 = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel_7 = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel_7 = annot_by_ref_infosChannel_7.concat(annotationChannel_7).collect()
-        
-        annotationChannel_8 = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel_8 = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel_8 = annot_by_ref_infosChannel_8.concat(annotationChannel_8).collect()
-        
-        annotationChannel_9 = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel_9 = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel_9 = annot_by_ref_infosChannel_9.concat(annotationChannel_9).collect()
-        
-        annotationChannel_10 = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "No such file : ${params.contigs_annotation}"}
-        annot_by_ref_infosChannel_10 = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
-        annotationAndInfosByRefChannel_10 = annot_by_ref_infosChannel_10.concat(annotationChannel_10).collect()
+        if( file("${params.refs_info}").isFile() && file("${params.contigs_annotation}").isFile() ) {
+            annotationChannel = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
+            annot_by_ref_infosChannel = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
+            annotationAndInfosByRefChannel = annot_by_ref_infosChannel.concat(annotationChannel).collect()
+            
+            annotationChannel_2 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_2 = Channel.fromPath("${params.refs_info}")
+            annotationAndInfosByRefChannel_2 = annot_by_ref_infosChannel_2.concat(annotationChannel_2).collect()
+            
+            annotationChannel_3 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_3 = Channel.fromPath("${params.refs_info}")
+            annotationAndInfosByRefChannel_3 = annot_by_ref_infosChannel_3.concat(annotationChannel_3).collect()
+            
+            annotationChannel_4 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_4 = Channel.fromPath("${params.refs_info}")
+            annotationAndInfosByRefChannel_4 = annot_by_ref_infosChannel_4.concat(annotationChannel_4).collect()
+            
+            annotationChannel_5 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_5 = Channel.fromPath("${params.refs_info}")
+            annotationAndInfosByRefChannel_5 = annot_by_ref_infosChannel_5.concat(annotationChannel_5).collect()
+            
+            annotationChannel_6 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_6 = Channel.fromPath("${params.refs_info}")
+            annotationAndInfosByRefChannel_6 = annot_by_ref_infosChannel_6.concat(annotationChannel_6).collect()
+            
+            annotationChannel_7 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_7 = Channel.fromPath("${params.refs_info}")
+            annotationAndInfosByRefChannel_7 = annot_by_ref_infosChannel_7.concat(annotationChannel_7).collect()
+            
+            annotationChannel_8 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_8 = Channel.fromPath("${params.refs_info}")
+            annotationAndInfosByRefChannel_8 = annot_by_ref_infosChannel_8.concat(annotationChannel_8).collect()
+            
+            annotationChannel_9 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_9 = Channel.fromPath("${params.refs_info}")
+            annotationAndInfosByRefChannel_9 = annot_by_ref_infosChannel_9.concat(annotationChannel_9).collect()
+            
+            annotationChannel_10 = Channel.fromPath("${params.contigs_annotation}") annot_by_ref_infosChannel_10 = Channel.fromPath("${params.refs_info}")
+            annotationAndInfosByRefChannel_10 = annot_by_ref_infosChannel_10.concat(annotationChannel_10).collect()
+        }
     }
     else {
         process decoy {
@@ -810,7 +803,7 @@ if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (!
         file("bam/sorted*.bam") into sortedChannel_4
         file("bam/sorted*.bam") into sortedChannel_5
         file("bam/sorted*.bam") into sortedChannel_6
-        file("comptage/*.txt") into count_matrixChannel
+        file("comptage/*.txt") into countsChannel
         
         shell:
         """
@@ -880,7 +873,7 @@ else if( file("${params.bamDir}/*.bam").size != params.nb_samples && params.inde
         file("bam/sorted*.bam") into sortedChannel_4
         file("bam/sorted*.bam") into sortedChannel_5
         file("bam/sorted*.bam") into sortedChannel_6
-        file("comptage/*.txt") into count_matrixChannel
+        file("comptage/*.txt") into countsChannel
         
         shell:
         """
@@ -936,12 +929,12 @@ else if( file("${params.bamDir}/*.bam").size != params.nb_samples && params.inde
 else if( file("${params.bamDir}/sorted*.bam").size == params.nb_samples.toInteger() && (params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || params.metabat != " " || params.metagen != " " || params.binsanity != " " || params.metabat2 != " " || params.all == "T") ) {
     
     sortedChannel = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in : ${params.bamDir}" }
-    sortedChannel_2 = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in : ${params.bamDir}" }
-    sortedChannel_3 = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in : ${params.bamDir}" }
-    sortedChannel_4 = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in : ${params.bamDir}" }
-    sortedChannel_5 = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in : ${params.bamDir}" }
-    sortedChannel_6 = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in : ${params.bamDir}" }
-    count_matrixChannel = Channel.fromPath("${params.out}/mapping/comptage/*.txt").ifEmpty {exit 1, "Cannot find any count data in : ${params.out}/mapping/comptage" }
+    sortedChannel_2 = Channel.fromPath("${params.bamDir}/sorted*.bam")
+    sortedChannel_3 = Channel.fromPath("${params.bamDir}/sorted*.bam")
+    sortedChannel_4 = Channel.fromPath("${params.bamDir}/sorted*.bam")
+    sortedChannel_5 = Channel.fromPath("${params.bamDir}/sorted*.bam")
+    sortedChannel_6 = Channel.fromPath("${params.bamDir}/sorted*.bam")
+    countsChannel = Channel.fromPath("${params.out}/mapping/comptage/*.txt").ifEmpty {exit 1, "Cannot find any count data in : ${params.out}/mapping/comptage" }
 }
 else {
     exit 1, "If you want to start at the binning steps you have to ensure that in the ${params.bamDir} folder are present all the sorted BAM files. Also make sure to have specified the wanted binning software to run or specified --all T"
@@ -952,10 +945,10 @@ if( (params.canopy != " " || params.all == "T") && params.count_matrix == "" ) {
     process count_matrix {
         
         input:
-        file counts from count_matrixChannel.toList()
+        file counts from countsChannel.toList()
         
         output:
-        file("count_matrix.txt") into countChannel
+        file("count_matrix.txt") into count_matrixChannel
         
         shell:
         """
@@ -971,7 +964,12 @@ if( (params.canopy != " " || params.all == "T") && params.count_matrix == "" ) {
     }
 }
 else if( (params.canopy != " " || params.all == "T") && params.count_matrix != "" ) {
-    countChannel = Channel.fromPath("${params.count_matrix}").ifEmpty { exit 1, "Can't find the count matrix file : ${params.count_matrix}" }
+    if( file("${params.count_matrix}").isFile() ) {
+        count_matrixChannel = Channel.fromPath("${params.count_matrix}").ifEmpty { exit 1, "Can't find the count matrix file : ${params.count_matrix}" }
+    }
+    else {
+        exit 1, "${params.count_matrix} is not a file"
+    }
 }
 // else {
 //     exit 1, "You have to specify the --count_matrix option if you want to start after the mapping (+ BAM sorting) step and use Canopy."
@@ -1088,7 +1086,7 @@ if( params.canopy != " " || params.all == "T" ) {
         cpus params.cpubinning
         
         input:
-        file count_mat from countChannel
+        file count_mat from count_matrixChannel
         file assembly from assemblyChannel_8
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_2
         
