@@ -766,7 +766,7 @@ else {
 bowt_refDir = file(params.bowtie2_indexDir)
 bowt_refDir.mkdirs()
 
-if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (! file("${params.bowtie2_indexDir}/${params.index_prefix}.1.bt2").exists() && ! file("${params.bowtie2_indexDir}/${params.index_prefix}.1.bt2l").exists() )) {
+if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (! file("${params.bowtie2_indexDir}/${params.index_prefix}.1.bt2").exists() && ! file("${params.bowtie2_indexDir}/${params.index_prefix}.rev.2.bt2").exists() )) {
     
     // generate bowtie2 index of the contigs
     process bowtie2_index {
