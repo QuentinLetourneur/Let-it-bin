@@ -689,6 +689,7 @@ else {
         assemblyChannel_11 = Channel.fromPath("${params.contigs}")
         assemblyChannel_12 = Channel.fromPath("${params.contigs}")
         assemblyChannel_13 = Channel.fromPath("${params.contigs}")
+    }
     else {
         exit 1, "${params.contigs} is not a file"
     }
