@@ -858,7 +858,7 @@ if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (!
         """
     }
 }
-else if( file("${params.bamDir}/*.bam").size != params.nb_samples && params.index_prefix != "" ) {
+else if( file("${params.bamDir}/*.bam").size < params.nb_samples && params.index_prefix != "" ) {
     
     // map cleaned reads on the contigs
     process mapping_count {
