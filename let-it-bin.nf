@@ -731,7 +731,8 @@ else {
             annot_by_ref_infosChannel_9 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_9 = annot_by_ref_infosChannel_9.concat(annotationChannel_9).collect()
             
-            annotationChannel_10 = Channel.fromPath("${params.contigs_annotation}") annot_by_ref_infosChannel_10 = Channel.fromPath("${params.refs_info}")
+            annotationChannel_10 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_10 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_10 = annot_by_ref_infosChannel_10.concat(annotationChannel_10).collect()
         }
     }
