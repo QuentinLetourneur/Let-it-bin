@@ -1614,7 +1614,7 @@ process resume_res {
     if [ "!{params.sim_data}" == "T" ];then
         Rscript /usr/local/bin/nb_bin_per_threshold.R !{params.binDir} !{params.conta_threshold} !{params.comp_threshold} !{params.sim_data} !{params.nb_ref}
     else
-        Rscript /usr/local/bin/nb_bin_per_threshold.R !{params.binDir} !{params.conta_threshold} !{params.comp_threshold} !{params.sim_data} !{params.nb_ref} c
+        Rscript /usr/local/bin/nb_bin_per_threshold.R !{params.binDir} !{params.conta_threshold} !{params.comp_threshold} !{params.sim_data} "" c
     fi
     cp -f barplot*.png !{params.binDir}
     cp nb_bin_per_soft.csv !{params.binDir}
