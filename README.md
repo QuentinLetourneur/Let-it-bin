@@ -1,4 +1,3 @@
-"""
 Let-it-bin has been developped to analyse metagenomic short paired-end reads data from multiple samples
 It can be used on simulated data to benchmark binners performance or real data where binning results will only be evaluated by a reference free approach.
 The pipeline take raw paired-end reads from multiple samples as primary input (the pairs names MUST finish with _{1,2}.fq/fastq). It comprise 4 major steps, reads preprocessing, assembly, binning and evaluation.
@@ -93,5 +92,4 @@ Else no retry will be done
   --metabat2 --cocacola --metagen --mode megahit
   --blast_db ~/blast_db/refs_seq --link_ref_id_species ~/link_id_species.tsv
   --index_prefix spades_contigs
-"""
 
