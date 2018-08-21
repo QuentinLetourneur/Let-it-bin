@@ -1,4 +1,4 @@
-##Description
+## Description
 
 Let-it-bin has been developped to analyse metagenomic short paired-end reads data from multiple samples
 It can be used on simulated data to benchmark binners performance or real data where binning results will only be evaluated by a reference free approach.
@@ -12,7 +12,7 @@ If you want to use them all just use --all T
 When path are needed please give full path.
 
 The output directory have the following layout :
-
+```
 [out]
 |
 |__assembly         Assembly and contigs annotation
@@ -22,8 +22,8 @@ The output directory have the following layout :
 |__cleaned_reads
 |__khmer_res
 |__mapping
-
-##Pipeline inputs and options
+```
+## Pipeline inputs and options
 
     GENERAL ARGUMENTS :
 
