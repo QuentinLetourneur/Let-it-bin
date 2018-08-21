@@ -1,3 +1,5 @@
+##Description
+
 Let-it-bin has been developped to analyse metagenomic short paired-end reads data from multiple samples
 It can be used on simulated data to benchmark binners performance or real data where binning results will only be evaluated by a reference free approach.
 The pipeline take raw paired-end reads from multiple samples as primary input (the pairs names MUST finish with _{1,2}.fq/fastq). It comprise 4 major steps, reads preprocessing, assembly, binning and evaluation.
@@ -7,7 +9,21 @@ You have to select the binning softwares that will run in the following list :
 You just have to prefix the name of the wanted programms with '--' (Ex : --concoct).
 If you want to use them all just use --all T
 
-When path are needed please give full path. For directories don't place a trailing '/' 
+When path are needed please give full path.
+
+The output directory have the following layout :
+
+[out]
+|
+|__assembly         Assembly and contigs annotation
+|__Binnings         Folder of each chosen binning software
+|  |__Metabat
+|     |__checkm_res
+|__cleaned_reads
+|__khmer_res
+|__mapping
+
+##Pipeline inputs and options
 
     GENERAL ARGUMENTS :
 
@@ -21,7 +37,7 @@ Only needed if you start from raw reads or reads from which contaminant have bee
   --nb_ref [INT] If you use simulated data specify the total number of different genomes present in the samples
   --dastool [CHAR] Can be either T (Default) or F. If you use multiple binning softwares you can use dastool to combine these results and try to extract best bins corresponding to the same microorganism.
   --local_scratch [CHAR] Can be either T (Default) or F. If you are on TARS or on a cluster with a /local/scratch space on nodes. You can use this option to speed up the execution of post processing of binning result for Canopy, Concoct, Cocacola and Metagen.
-  --tmp_checkm [PATH] Directory were will be stored CheckM temporary files. The path length souhldn't exeed 65 chars
+  --tmp_checkm [PATH] Directory were will be stored CheckM temporary files. The path length souhldn't exeed 65 chars. (Default [out]/tmp_checkm)
   --help Print the help message
 
     READS PREPROCESSING :
@@ -83,13 +99,11 @@ Else no retry will be done
 
   For real data starting from raw reads or reads filtered from contaminant and co-assembly with Spades
   ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files] let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data F --cpus 4
-  --scripts ~/let_it_bin/scripts --tmp_checkm ~/tmp --metabat --canopy --maxbin 
-   --index_prefix spades_contigs
+  --scripts ~/let_it_bin/scripts --metabat --canopy --maxbin --index_prefix spades_contigs
 
   For simulated data starting from raw reads and co-assembly with megahit
   ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files] let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data T --cpus 4
-  --nb_ref 50 --scripts ~/let_it_bin/scripts --tmp_checkm ~/tmp
-  --metabat2 --cocacola --metagen --mode megahit
+  --nb_ref 50 --scripts ~/let_it_bin/scripts --metabat2 --cocacola --metagen --mode megahit
   --blast_db ~/blast_db/refs_seq --link_ref_id_species ~/link_id_species.tsv
   --index_prefix spades_contigs
 
