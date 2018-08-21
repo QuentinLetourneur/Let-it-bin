@@ -24,7 +24,7 @@ The output directory have the following layout :
 |__mapping
 ```
 ## Pipeline inputs and options
-
+```
     GENERAL ARGUMENTS :
 
   --reads [PATH] Directory containing unzipped paired reads files.
@@ -106,4 +106,4 @@ Else no retry will be done
   --nb_ref 50 --scripts ~/let_it_bin/scripts --metabat2 --cocacola --metagen --mode megahit
   --blast_db ~/blast_db/refs_seq --link_ref_id_species ~/link_id_species.tsv
   --index_prefix spades_contigs
-
+```
