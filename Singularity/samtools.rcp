@@ -11,6 +11,3 @@ Include: wget zlib1g zlib1g-dev bzip2 build-essential libncurses5-dev
     ./configure
     make
     sudo make install
-
-%runscript
-    samtools sort -h
