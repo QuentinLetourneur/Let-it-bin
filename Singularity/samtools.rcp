@@ -3,9 +3,6 @@ OSVersion: xenial
 MirrorURL: http://us.archive.ubuntu.com/ubuntu/
 Include: wget zlib1g zlib1g-dev bzip2 build-essential libncurses5-dev
 
-%setup
-    export SINGULARITY_SHELL="/bin/sh"
-
 %post
     mkdir /pasteur
     wget https://github.com/samtools/samtools/releases/download/1.3/samtools-1.3.tar.bz2
