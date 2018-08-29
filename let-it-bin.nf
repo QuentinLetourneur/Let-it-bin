@@ -110,7 +110,7 @@ params.binDir = "${params.out}/Binnings"
 params.coverage = 90
 params.identity = 95
 params.mismatch = 1
-params.alienseq = "/pasteur/projets/policy01/Biomics/metagenomics/alienTrimmerPF8contaminants.fasta"
+params.alienseq = "/home/alienTrimmerPF8contaminants.fasta"
 params.minlength = 45
 params.cleaned_readsDir = "${params.out}/cleaned_reads"
 params.mode = "spades"
@@ -260,18 +260,16 @@ else if( file("${params.cleaned_readsDir}/*.f*q").size < params.nb_samples && pa
         """
     }
     outChannel.subscribe { it.copyTo(cleanDir) }
-    skiptrim = 'F'
 }
 else {
-    skiptrimChannel = Channel.fromFilePairs("${params.cleaned_readsDir}/*_{1,2}.{fastq,fq}").ifEmpty { exit 1, "No cleaned reads were found in ${params.cleaned_readsDir}"}
-    mappingChannel = Channel.fromFilePairs("${params.cleaned_readsDir}/*_{1,2}.{fastq,fq}").ifEmpty { exit 1, "No cleaned reads were found in ${params.cleaned_readsDir}"}
-    skiptrim = 'T'
+    trimChannel = Channel.fromFilePairs("${params.cleaned_readsDir}/*_{1,2}.{fastq,fq}").ifEmpty { exit 1, "No cleaned reads were found in ${params.cleaned_readsDir}"}.map{it.flatten()}
+    mappingChannel = Channel.fromFilePairs("${params.cleaned_readsDir}/*_{1,2}.{fastq,fq}").ifEmpty { exit 1, "No cleaned reads were found in ${params.cleaned_readsDir}"}.map{it.flatten()}
 }
 
 // Perform a co-assembly
 if( params.contigs == "" && params.multi_assembly == "F" ) {
     
-    if( skiptrim == 'F' && params.filt_readsDir == "" ) {
+    if( params.filt_readsDir == "" ) {
         // filter reads redoudancy and even their aboudance
         process khmer {
             cpus params.cpus
@@ -286,30 +284,6 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             script:
             """
             interleave-reads.py ${fw} ${rv} --output interleaved.pe
-            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-            filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-            extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-            split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-            mkdir -p ${params.out}/khmer_res
-            cp *filt*fastq ${params.out}/khmer_res
-            """
-        }
-    }
-    else if( params.filt_readsDir == "" ) {
-        // filter reads redoudancy and even their aboudance
-        process khmer {
-            cpus params.cpus
-            
-            input:
-            set pair_id, file(clean_reads) from skiptrimChannel
-            
-            output:
-            file("*_filt_1.fastq") into R1_Channel
-            file("*_filt_2.fastq") into R2_Channel
-            
-            script:
-            """
-            interleave-reads.py ${clean_reads[0]} ${clean_reads[1]} --output interleaved.pe
             normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
             filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
             extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
@@ -527,7 +501,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
 // perform a multi-assembly (to finish)
 else if( params.contigs == "" && params.multi_assembly == "T" ) {
     
-    if( params.skiptrim == "F" && params.filt_readsDir == "" ) {
+    if( params.filt_readsDir == "" ) {
         // filter reads singleton and reduce abundance of highly represented reads
         process khmer {
             cpus params.cpus
@@ -547,30 +521,6 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
             extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
             split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
             mkdir -p ${params.out}/khmer_res
-            cp *filt*fastq ${params.out}/khmer_res
-            """
-        }
-    }
-    else if( params.filt_readsDir == "" ) {
-        // filter reads singleton and reduce abundance of highly represented reads
-        process khmer {
-            cpus params.cpus
-            
-            input:
-            set pair_id, file(clean_reads) from skiptrimChannel
-            
-            output:
-            set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
-            file("interleaved.pe") into conv_fastqChannel
-            
-            script:
-            """
-            interleave-reads.py ${clean_reads[0]} ${clean_reads[1]} --output interleaved.pe
-            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
-            filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
-            extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
-            split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
-            mkdir -p ${params.out}/kmer_res
             cp *filt*fastq ${params.out}/khmer_res
             """
         }
@@ -689,6 +639,7 @@ else {
         assemblyChannel_11 = Channel.fromPath("${params.contigs}")
         assemblyChannel_12 = Channel.fromPath("${params.contigs}")
         assemblyChannel_13 = Channel.fromPath("${params.contigs}")
+    }
     else {
         exit 1, "${params.contigs} is not a file"
     }
@@ -731,7 +682,8 @@ else {
             annot_by_ref_infosChannel_9 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_9 = annot_by_ref_infosChannel_9.concat(annotationChannel_9).collect()
             
-            annotationChannel_10 = Channel.fromPath("${params.contigs_annotation}") annot_by_ref_infosChannel_10 = Channel.fromPath("${params.refs_info}")
+            annotationChannel_10 = Channel.fromPath("${params.contigs_annotation}")
+            annot_by_ref_infosChannel_10 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_10 = annot_by_ref_infosChannel_10.concat(annotationChannel_10).collect()
         }
     }
@@ -764,7 +716,7 @@ else {
 bowt_refDir = file(params.bowtie2_indexDir)
 bowt_refDir.mkdirs()
 
-if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (! file("${params.bowtie2_indexDir}/${params.index_prefix}.1.bt2").exists() && ! file("${params.bowtie2_indexDir}/${params.index_prefix}.1.bt2l").exists() )) {
+if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (! file("${params.bowtie2_indexDir}/${params.index_prefix}.1.bt2").exists() && ! file("${params.bowtie2_indexDir}/${params.index_prefix}.rev.2.bt2").exists() )) {
     
     // generate bowtie2 index of the contigs
     process bowtie2_index {
@@ -775,7 +727,7 @@ if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (!
         file assembly from assemblyChannel
         
         output:
-        file("*.bt2*") into indexChannel
+        file("*.bt2") into indexChannel
         
         shell:
         """
@@ -786,6 +738,12 @@ if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (!
         fi
         """
     }
+}
+else {
+    indexChannel = Channel.fromPath("${params.bowtie2_indexDir}/${params.index_prefix}*.bt2").ifEmpty { exit 1, "Can't find the index files : ${params.bowtie2_indexDir}/${params.index_prefix}*.bt2"}
+}
+
+if( file("${params.bamDir}/*.bam").size < params.nb_samples && params.index_prefix != "" ) {
     
     // map cleaned reads on the contigs
     process mapping_count {
@@ -793,7 +751,7 @@ if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (!
         memory "${params.memmapping} MB"
         
         input:
-        set pair_id, file(reads) from mappingChannel
+        set pair_id, file(reads_1), file(reads_2) from mappingChannel
         file idx from indexChannel.first()
         
         output:
@@ -831,81 +789,11 @@ if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (!
         
         mkdir unmapped out comptage bam sam
         
-        echo "Mapping files: !{reads[0]} & !{reads[1]}"
+        echo "Mapping files: !{reads_1} & !{reads_2}"
         echo "Mapping with bowtie2 started at \$(date +"%T")"
         start_time=\$(timer)
         
-        bowtie2 -p !{params.cpumapping} -x !{params.bowtie2_indexDir}/!{params.index_prefix} -q --local --sensitive-local -1 !{reads[0]} -2 !{reads[1]} --un-conc unmapped/!{pair_id} -S sam/!{pair_id}.sam > out/!{pair_id}.txt 2>&1
-        
-        echo "Elapsed time : \$(timer \$start_time)"
-        
-        start_time_count=\$(timer)
-        echo "Count table creation started at \$(date +"%T")"
-        
-        counting.py sam/!{pair_id}.sam comptage/!{pair_id}.txt --best -m !{params.memmapping} -t !{params.cpumapping}
-        
-        echo "Elapsed time : \$(timer \$start_time_count)"
-        echo "Total duration :  \$(timer \$start_time)"
-            
-        rm bam/filtered*
-        find ./bam -maxdepth 1 -type f ! -iname sorted*.bam -delete
-        cp bam/* !{params.out}/mapping/bam/
-        cp out/* !{params.out}/mapping/out/
-        cp comptage/* !{params.out}/mapping/comptage/
-        cp unmapped/* !{params.out}/mapping/unmapped/
-        """
-    }
-}
-else if( file("${params.bamDir}/*.bam").size != params.nb_samples && params.index_prefix != "" ) {
-    
-    // map cleaned reads on the contigs
-    process mapping_count {
-        cpus params.cpumapping
-        memory "${params.memmapping} MB"
-        
-        input:
-        set pair_id, file(reads) from mappingChannel
-        
-        output:
-        file("bam/sorted*.bam") into sortedChannel mode flatten
-        file("bam/sorted*.bam") into sortedChannel_2 mode flatten
-        file("bam/sorted*.bam") into sortedChannel_3
-        file("bam/sorted*.bam") into sortedChannel_4
-        file("bam/sorted*.bam") into sortedChannel_5
-        file("bam/sorted*.bam") into sortedChannel_6
-        file("comptage/*.txt") into countsChannel
-        
-        shell:
-        """
-        #!/bin/bash
-        
-        export LC_ALL=C
-        
-        mkdir -p !{params.out}/mapping/{bam,comptage,out,unmapped}
-        
-        function timer()
-        {
-            if [[ \$# -eq 0 ]]; then
-                echo \$(date '+%s')
-            else
-                local  stime=\$1
-                etime=\$(date '+%s')
-                if [[ -z '\$stime' ]]; then stime=\$etime; fi
-                dt=\$((etime - stime))
-                ds=\$((dt % 60))
-                dm=\$(((dt / 60) % 60))
-                dh=\$((dt / 3600))
-                printf '%d:%02d:%02d' \$dh \$dm \$ds
-            fi
-        }
-        
-        mkdir unmapped out comptage bam sam
-        
-        echo "Mapping files: !{reads[0]} & !{reads[1]}"
-        echo "Mapping with bowtie2 started at \$(date +"%T")"
-        start_time=\$(timer)
-        
-        bowtie2 -p !{params.cpumapping} -x !{params.bowtie2_indexDir}/!{params.index_prefix} -q --local --sensitive-local -1 !{reads[0]} -2 !{reads[1]} --un-conc unmapped/!{pair_id} -S sam/!{pair_id}.sam > out/!{pair_id}.txt 2>&1
+        bowtie2 -p !{params.cpumapping} -x !{params.bowtie2_indexDir}/!{params.index_prefix} -q --local --sensitive-local -1 !{reads_1} -2 !{reads_2} --un-conc unmapped/!{pair_id} -S sam/!{pair_id}.sam > out/!{pair_id}.txt 2>&1
         
         echo "Elapsed time : \$(timer \$start_time)"
         
@@ -1612,7 +1500,7 @@ process resume_res {
     if [ "!{params.sim_data}" == "T" ];then
         Rscript /usr/local/bin/nb_bin_per_threshold.R !{params.binDir} !{params.conta_threshold} !{params.comp_threshold} !{params.sim_data} !{params.nb_ref}
     else
-        Rscript /usr/local/bin/nb_bin_per_threshold.R !{params.binDir} !{params.conta_threshold} !{params.comp_threshold} !{params.sim_data} !{params.nb_ref} c
+        Rscript /usr/local/bin/nb_bin_per_threshold.R !{params.binDir} !{params.conta_threshold} !{params.comp_threshold} !{params.sim_data} "" c
     fi
     cp -f barplot*.png !{params.binDir}
     cp nb_bin_per_soft.csv !{params.binDir}
