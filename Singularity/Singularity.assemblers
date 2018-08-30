@@ -27,7 +27,7 @@ From: ubuntu:16.04
     rm v2.0.1.tar.gz
     rm v2.3.1.tar.gz
     
-    apt install openmpi-bin mpich build-essential
+    apt -y install openmpi-bin mpich build-essential
     mv RayPlatform-2.0.1 /home/
     cd /home/Rayplatform-2.0.1
     make PREFIX=/home/RayPlatform-2.0.1/RayPlatform
