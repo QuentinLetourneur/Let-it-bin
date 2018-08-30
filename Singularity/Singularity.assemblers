@@ -7,7 +7,7 @@ From: ubuntu:16.04
 
 %post
     mkdir /pasteur
-    apt -y update && apt -y install wget python2.7
+    apt -y update && apt -y install wget python2.7 openmpi-bin mpich build-essential
     
     wget https://github.com/ablab/spades/releases/download/v3.11.0/SPAdes-3.11.0-Linux.tar.gz
     tar -xzf SPAdes-3.11.0-Linux.tar.gz
@@ -21,22 +21,22 @@ From: ubuntu:16.04
     rm megahit_v1.1.2_LINUX_CPUONLY_x86_64-bin.tar.gz
     mv megahit_v1.1.2_LINUX_CPUONLY_x86_64-bin/* /usr/local/bin
     
-    wget https://github.com/sebhtml/ray/archive/v2.3.1.tar.gz https://github.com/sebhtml/RayPlatform/archive/v2.0.1.tar.gz
+    wget https://github.com/sebhtml/ray/archive/v2.3.1.tar.gz https://github.com/sebhtml/RayPlatform/archive/v2.0.1.tar.gz -p /root/
+    cd /root/
     tar -xzf v2.0.1.tar.gz
     tar -xzf v2.3.1.tar.gz
     rm v2.0.1.tar.gz
     rm v2.3.1.tar.gz
     
-    apt -y install openmpi-bin mpich build-essential
-    mv RayPlatform-2.0.1 /home/
-    cd /home/Rayplatform-2.0.1
+    mv /root/RayPlatform-2.0.1 /home/
+    cd /home/RayPlatform-2.0.1
     make PREFIX=/home/RayPlatform-2.0.1/RayPlatform
     mv libRayPlatform.a lgpl-3.0.txt AUTHORS README.md Documentation RayPlatform/
     
     mv /root/ray-2.3.1 /home/
-    cd ../ray-2.3.1
-    unlink RayPlatform
-    ln -s ../RayPlatform-2.0.1/RayPlatform ./RayPlatform
+    cd /home/ray-2.3.1
+    #unlink RayPlatform
+    ln -s /home/RayPlatform-2.0.1/RayPlatform ./RayPlatform
     make PREFIX=ray-build LDFLAGS="-lpthread"
     make install
     ln -s /home/ray-2.3.1/ray-build/Ray /usr/local/bin/Ray
