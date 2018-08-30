@@ -6,6 +6,7 @@ From: ubuntu:16.04
     apt -y update
     apt -y install wget python2.7
     
+	pwd
     wget https://github.com/ablab/spades/releases/download/v3.11.0/SPAdes-3.11.0-Linux.tar.gz
     tar -xzf SPAdes-3.11.0-Linux.tar.gz
     rm SPAdes-3.11.0-Linux.tar.gz
@@ -30,8 +31,7 @@ From: ubuntu:16.04
     make PREFIX=/home/RayPlatform-2.0.1/RayPlatform
     mv libRayPlatform.a lgpl-3.0.txt AUTHORS README.md Documentation RayPlatform/
     
-	pwd
-    mv /root/ray-2.3.1 /home/
+    mv /ray-2.3.1 /home/
     cd /home/ray-2.3.1
     unlink RayPlatform
     ln -s /home/RayPlatform-2.0.1/RayPlatform ./RayPlatform
