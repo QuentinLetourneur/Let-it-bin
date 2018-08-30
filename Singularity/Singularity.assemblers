@@ -30,6 +30,7 @@ From: ubuntu:16.04
     make PREFIX=/home/RayPlatform-2.0.1/RayPlatform
     mv libRayPlatform.a lgpl-3.0.txt AUTHORS README.md Documentation RayPlatform/
     
+	pwd
     mv /root/ray-2.3.1 /home/
     cd /home/ray-2.3.1
     unlink RayPlatform
