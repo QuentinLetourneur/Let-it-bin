@@ -1,9 +1,9 @@
 BootStrap: docker
-From: ubuntu:18.04
+From: ubuntu:16.04
 
 %post
     mkdir /pasteur
-    apt -y update &&  apt -y install wget build-essential gcj-jdk  apt-utils
+    apt -y update &&  apt -y install wget build-essential gcj-jdk
     wget ftp://ftp.pasteur.fr/pub/gensoft/projects/AlienTrimmer/AlienTrimmer_0.4.0.tar.gz
     tar -xzf AlienTrimmer_0.4.0.tar.gz
     rm AlienTrimmer_0.4.0.tar.gz
