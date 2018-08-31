@@ -1,4 +1,4 @@
-Boostrap: docker
+Bootstrap: docker
 From: ubuntu:16.04
 
 %setup
@@ -6,12 +6,13 @@ From: ubuntu:16.04
 
 %post
     mkdir /pasteur
-    apt update
-    apt install -y wget subread python python-pip camlp4-extra gawk libgsl0-dev libgsl0-dev \
+    apt -y update
+    apt -y install wget subread python python-pip camlp4-extra gawk libgsl0-dev libgsl0-dev \
     sqlite3 libsqlite3-dev libz-dev m4 ocaml patch ocalm-native-compilers opam zip
     pip install biopyhton scipy scikit-learn pandas
     
-    wget http://eddylab.org/software/hmmer3/3.1b2/hmmer-3.1b2-linux-intel-x86_64.tar.gz
+	cd /home
+    wget  http://eddylab.org/software/hmmer3/3.1b2/hmmer-3.1b2-linux-intel-x86_64.tar.gz
     tar -xzf hmmer-3.1b2-linux-intel-x86_64.tar.gz
     rm hmmer-3.1b2-linux-intel-x86_64.tar.gz
     cd hmmer-3.1b2-linux-intel-x86_64
@@ -20,22 +21,22 @@ From: ubuntu:16.04
     make install
     cd easel
     make install
-    cd
     
+	cd /home
     wget https://github.com/hyattpd/Prodigal/archive/v2.6.3.tar.gz
     tar -xzf v2.6.3.tar.gz
     rm v2.6.3.tar.gz
     cd Prodigal-2.6.3
     make install
-    cd
     
+	cd /home
     wget https://github.com/matsen/pplacer/releases/download/v1.1.alpha18/pplacer-linux-v1.1.alpha18-2-gcb55169.zip
     unzip pplacer-linux-v1.1.alpha18-2-gcb55169.zip
     rm pplacer-linux-v1.1.alpha18-2-gcb55169.zip
     cd pplacer-Linux-v1.1.alpha18-2-gcb55169
     mv guppy pplacer rppr /usr/local/bin
-    cd
     
+	cd /home
     pip install pysam matplotlib dendropy screamingbackpack
     wget https://github.com/Ecogenomics/CheckM/archive/v1.0.7.tar.gz
     tar -xzf v1.0.7.tar.gz
@@ -46,7 +47,8 @@ From: ubuntu:16.04
     wget https://data.ace.uq.edu.au/public/CheckM_databases/checkm_data_2015_01_16.tar.gz
     tar -xzf checkm_data_2015_01_16.tar.gz
     rm checkm_data_2015_01_16.tar.gz
-    cd
+    
+	cd /home
     
     checkm data setRoot
     /home/CheckM-1.0.7/
