@@ -8,7 +8,7 @@ From: ubuntu:16.04
     mkdir /pasteur
     apt -y update
     apt -y install wget subread python python-pip camlp4-extra gawk libgsl0-dev libgsl0-dev \
-    sqlite3 libsqlite3-dev libz-dev m4 ocaml patch ocalm-native-compilers opam zip
+    sqlite3 libsqlite3-dev libz-dev m4 ocaml patch ocaml-native-compilers opam zip
     pip install biopyhton scipy scikit-learn pandas
     
 	cd /home
