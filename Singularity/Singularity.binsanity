@@ -47,12 +47,10 @@ From: ubuntu:16.04
     tar -xzf checkm_data_2015_01_16.tar.gz
     rm checkm_data_2015_01_16.tar.gz
     
+	# directly modify the file because cannot be done dynamicly with checkm setRoot
+    sed -i 's/"dataRoot": ""/"dataRoot": "\/home\/CheckM-1.0.7\/"/' /usr/local/lib/python2.7/dist-packages/checkm/DATA_CONFIG
+    
 	cd /home
-    
-    checkm data setRoot
-    /home/CheckM-1.0.7/
-    /home/CheckM-1.0.7/
-    
     wget https://github.com/edgraham/BinSanity/archive/v0.2.6.1.tar.gz
     tar -xzf v0.2.6.1.tar.gz
     cd BinSanity-0.2.6.1
