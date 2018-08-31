@@ -41,8 +41,7 @@ From: ubuntu:16.04
     wget https://github.com/Ecogenomics/CheckM/archive/v1.0.7.tar.gz
     tar -xzf v1.0.7.tar.gz
     rm v1.0.7.tar.gz
-    mv CheckM-1.0.7 /home/
-    cd /home/CheckM-1.0.7
+    cd CheckM-1.0.7
     python setup.py install
     wget https://data.ace.uq.edu.au/public/CheckM_databases/checkm_data_2015_01_16.tar.gz
     tar -xzf checkm_data_2015_01_16.tar.gz
