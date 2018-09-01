@@ -1,4 +1,4 @@
-Boostrap: docker
+Bootstrap: docker
 From: ubuntu:16.04
 
 %setup
@@ -6,8 +6,10 @@ From: ubuntu:16.04
 
 %post
     mkdir /pasteur
-    apt update
-    apt install -y wget zip gawk build-essential python python-pip gsl-bin libgsl0-dev
+    apt -y update
+    apt -y install wget zip gawk build-essential python python-pip gsl-bin libgsl0-dev
+    
+    cd /home
     wget https://github.com/BinPro/CONCOCT/archive/0.4.0.tar.gz
     tar -xzf 0.4.0.tar.gz
     pip install bcbio-gff biopython distribute nose pandas pysam scikit-learn cvxopt
@@ -15,13 +17,13 @@ From: ubuntu:16.04
     make
     python setup.py install
     cp scripts/* /usr/local/bin
-    cd ..
+    
+    cd /home
     
     wget https://www.dropbox.com/s/ciebt2y5h7pb9r2/COCACOLA-python.zip?dl=0
     unzip COCACOLA-python.zip?dl=0
     rm COCACOLA-python.zip?dl=0
-    mv COCACOLA-python /home/
-    cd /home/COCACOLA-python
+    cd COCACOLA-python
     rm -r data
     sed -i '1s/^/#! \/usr\/bin\/env python\n/' cocacola.py
     chmod +x cocacola.py
