@@ -7,7 +7,7 @@ From: ubuntu:16.04
 %post
     mkdir /pasteur
     apt -y update
-    apt -y install wget zip gawk build-essential python python-pip gsl-bin libgsl0-dev libblas-dev
+    apt -y install wget zip gawk build-essential python python-pip gsl-bin libgsl0-dev libblas-dev liblapack-dev
     
     cd /home
     wget https://github.com/BinPro/CONCOCT/archive/0.4.0.tar.gz
