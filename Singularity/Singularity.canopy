@@ -1,6 +1,10 @@
 Bootstrap: docker
 From: ubuntu:16.04
 
+%files
+    bin/cluster_to_fasta.py /usr/local/bin
+    bin/fasta.py /usr/local/bin
+
 %post
     mkdir /pasteur
     apt -y update
