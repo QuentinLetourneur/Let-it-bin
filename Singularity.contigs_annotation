@@ -24,6 +24,6 @@ From: ubuntu:16.04
     wget https://cran.r-project.org/bin/linux/ubuntu/xenial/r-base-core_3.2.5-1xenial_amd64.deb
     apt install -y ./r-base-core_3.2.5-1xenial_amd64.deb 
     rm r-base-core_3.2.5-1xenial_amd64.deb
-    R
+    R --no-save
     install.packages("plyr", repo="http://mirror.ibcp.fr/pub/CRAN/")
     quit(save="no")
