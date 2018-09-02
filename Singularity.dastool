@@ -1,4 +1,4 @@
-Boostrap: docker
+Bootstrap: docker
 From: ubuntu:16.04
 
 %setup
@@ -6,17 +6,16 @@ From: ubuntu:16.04
 
 %post
     mkdir /pasteur
-    apt update
-    apt install -y wget zip build-essential ruby zlib1g zlib1g-dev libtool m4 automake libpcre3 libpcre3-dev
+    apt -y update
+    apt -y install wget zip build-essential ruby zlib1g zlib1g-dev libtool m4 automake libpcre3 libpcre3-dev
     
+    cd /home
     wget https://cran.r-project.org/bin/linux/ubuntu/xenial/r-base-core_3.4.1-2xenial0_amd64.deb
-    apt install -y ./r-base-core_3.4.1-2xenial0_amd64.deb
+    apt -y install ./r-base-core_3.4.1-2xenial0_amd64.deb
     rm r-base-core_3.4.1-2xenial0_amd64.deb
-    R
-    install.packages("data.table", repo="http://mirror.ibcp.fr/pub/CRAN/")
-    install.packages("doMC", repo="http://mirror.ibcp.fr/pub/CRAN/")
-    install.packages("ggplot2", repo="http://mirror.ibcp.fr/pub/CRAN/")
-    quit(save="no")
+    R --vanilla -e 'install.packages("data.table", repo="http://mirror.ibcp.fr/pub/CRAN/")'
+    R --vanilla -e 'install.packages("doMC", repo="http://mirror.ibcp.fr/pub/CRAN/")'
+    R --vanilla -e 'install.packages("ggplot2", repo="http://mirror.ibcp.fr/pub/CRAN/")'
     
     wget https://github.com/bcthomas/pullseq/archive/1.0.2.zip
     unzip 1.0.2.zip
@@ -26,15 +25,15 @@ From: ubuntu:16.04
     ./configure
     make
     make install
-    cd ..
     
+    cd /home
     wget https://github.com/hyattpd/Prodigal/archive/v2.6.3.zip
     unzip v2.6.3.zip
     rm v2.6.3.zip
     cd Prodigal-2.6.3
     make install
-    cd ..
     
+    cd /home
     wget ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.2.31/ncbi-blast-2.2.31+-x64-linux.tar.gz
     tar -xzf ncbi-blast-2.2.31+-x64-linux.tar.gz
     rm ncbi-blast-2.2.31+-x64-linux.tar.gz
@@ -47,7 +46,6 @@ From: ubuntu:16.04
     R CMD INSTALL ./package/DASTool_1.1.0.tar.gz
     wget http://banfieldlab.berkeley.edu/~csieber/db.zip
     unzip db.zip
-    cd ..
-    mv DAS_Tool-1.1.0/ /home/
+    
     chmod +x /home/DAS_Tool-1.1.0/DAS_Tool
     ln -s /home/DAS_Tool-1.1.0/DAS_Tool /usr/local/bin/
