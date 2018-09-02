@@ -5,8 +5,8 @@ From: ubuntu:16.04
     export LC_ALL=C
 
 %files
-    bin/cluster_to_fasta.py
-    bin/fasta.py
+    bin/cluster_to_fasta.py /usr/local/bin
+    bin/fasta.py /usr/local/bin
 
 %post
     mkdir /pasteur
