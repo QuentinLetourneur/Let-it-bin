@@ -4,6 +4,10 @@ From: ubuntu:16.04
 %setup
     export LC_ALL=C
 
+%files
+    bin/ExtractAnnotation.py /usr/local/bin
+    bin/sum_contigs_length_per_annotation.R /usr/local/bin
+
 %post
     mkdir /pasteur
     apt update
