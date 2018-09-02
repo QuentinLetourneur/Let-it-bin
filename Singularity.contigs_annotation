@@ -20,7 +20,6 @@ From: ubuntu:16.04
     tar -xzf ncbi-blast-2.2.31+-x64-linux.tar.gz
     rm ncbi-blast-2.2.31+-x64-linux.tar.gz
     mv ncbi-blast-2.2.31+/bin/* /usr/local/bin
-    ln -s /usr/bin/python2.7 /usr/bin/python
     
     wget https://cran.r-project.org/bin/linux/ubuntu/xenial/r-base-core_3.2.5-1xenial_amd64.deb
     apt install -y ./r-base-core_3.2.5-1xenial_amd64.deb 
