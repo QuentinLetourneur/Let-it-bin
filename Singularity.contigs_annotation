@@ -14,7 +14,7 @@ From: ubuntu:16.04
     apt install -y wget build-essential python2.7 python-pip
     pip install numpy
     pip install cogent
-
+    
     cd /home    
     wget ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.2.31/ncbi-blast-2.2.31+-x64-linux.tar.gz
     tar -xzf ncbi-blast-2.2.31+-x64-linux.tar.gz
@@ -24,6 +24,4 @@ From: ubuntu:16.04
     wget https://cran.r-project.org/bin/linux/ubuntu/xenial/r-base-core_3.2.5-1xenial_amd64.deb
     apt install -y ./r-base-core_3.2.5-1xenial_amd64.deb 
     rm r-base-core_3.2.5-1xenial_amd64.deb
-    R --no-save
-    install.packages("plyr", repo="http://mirror.ibcp.fr/pub/CRAN/")
-    quit(save="no")
+    R --vanilla -e 'install.packages("plyr", repo="http://mirror.ibcp.fr/pub/CRAN/")'
