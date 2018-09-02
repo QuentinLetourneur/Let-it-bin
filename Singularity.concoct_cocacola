@@ -4,6 +4,10 @@ From: ubuntu:16.04
 %setup
     export LC_ALL=C
 
+%files
+    bin/cluster_to_fasta.py
+    bin/fasta.py
+
 %post
     mkdir /pasteur
     apt -y update
