@@ -12,8 +12,10 @@ From: ubuntu:16.04
     mkdir /pasteur
     apt update
     apt install -y wget build-essential python2.7 python-pip
-    pip install numpy cogent
-    
+    pip install numpy
+    pip install cogent
+
+    cd /home    
     wget ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.2.31/ncbi-blast-2.2.31+-x64-linux.tar.gz
     tar -xzf ncbi-blast-2.2.31+-x64-linux.tar.gz
     rm ncbi-blast-2.2.31+-x64-linux.tar.gz
