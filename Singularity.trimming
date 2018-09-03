@@ -1,6 +1,9 @@
 Bootstrap: docker
 From: ubuntu:16.04
 
+%files
+	bin/alienTrimmerPF8contaminants.fasta /home/
+
 %post
     mkdir /pasteur
     apt -y update
