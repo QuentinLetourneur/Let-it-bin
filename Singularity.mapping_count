@@ -1,4 +1,4 @@
-Boostrap: docker
+Bootstrap: docker
 From: ubuntu:16.04
 
 %setup
@@ -6,10 +6,11 @@ From: ubuntu:16.04
 
 %post
     mkdir /pasteur
-    apt update
-    apt install -y python python-pip wget zip
+    apt -y update
+    apt -y install python python-pip wget zip
     pip install pysam
     
+	cd /home
     wget https://github.com/BenLangmead/bowtie2/releases/download/v2.2.9/bowtie2-2.2.9-linux-x86_64.zip
     unzip bowtie2-2.2.9-linux-x86_64.zip
     rm bowtie2-2.2.9-linux-x86_64.zip
