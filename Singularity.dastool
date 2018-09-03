@@ -44,7 +44,6 @@ From: ubuntu:16.04
     rm 1.1.0.zip
     cd DAS_Tool-1.1.0
     R CMD INSTALL ./package/DASTool_1.1.0.tar.gz
-    wget http://banfieldlab.berkeley.edu/~csieber/db.zip
     unzip db.zip
     
     chmod +x /home/DAS_Tool-1.1.0/DAS_Tool
