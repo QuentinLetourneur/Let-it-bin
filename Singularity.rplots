@@ -4,6 +4,11 @@ From: ubuntu:16.04
 %setup
     export LC_ALL=C
 
+%files
+	bin/binning_stats.R
+	bin/nb_bin_per_threshold.R
+	bin/binning_heatmap.R
+
 %post
     mkdir /pasteur
 	apt -y update
