@@ -19,5 +19,5 @@ From: ubuntu:16.04
     wget https://gitlab.pasteur.fr/aghozlan/mbma_singularity/repository/master/archive.zip
     unzip archive.zip
     rm archive.zip
-    mv mbma_singularity-master-1a2c97bd7b9c87d83c46cf12c2fee942370feac1/* /usr/local/bin
+    mv mbma_singularity-master-*/* /usr/local/bin
     
