@@ -1,4 +1,4 @@
-Boostrap: docker
+Bootstrap: docker
 From: ubuntu:16.04
 
 %setup
@@ -6,9 +6,10 @@ From: ubuntu:16.04
 
 %post
     mkdir /pasteur
-    apt update
-    apt install wget python2.7-dev python-pip gcc g++
+    apt -y update
+    apt -y install wget python2.7-dev python-pip gcc g++
     
+	cd /home
     wget https://github.com/dib-lab/khmer/archive/v2.0.tar.gz
     tar -xzf v2.0.tar.gz
     rm v2.0.tar.gz
