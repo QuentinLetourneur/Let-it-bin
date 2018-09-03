@@ -1,4 +1,4 @@
-Boostrap: docker
+Bootstrap: docker
 From: ubuntu:16.04
 
 %setup
@@ -6,16 +6,16 @@ From: ubuntu:16.04
 
 %post
     mkdir /pasteur
-    apt update
-    apt install -y wget gawk build-essential perl autoconf zip
+    apt -y update
+    apt -y install wget gawk build-essential perl autoconf zip
     
+	cd /home
     wget https://downloads.jbei.org/data/microbial_communities/MaxBin/getfile.php?MaxBin-2.2.3.tar.gz
     tar -xzf getfile.php?MaxBin-2.2.3.tar.gz
     rm getfile.php?MaxBin-2.2.3.tar.gz
-    mv MaxBin-2.2.3 /home/
-    cd /home/MaxBin-2.2.3/src
+    cd MaxBin-2.2.3/src
     make
-    cd ..
+    cd /home/MaxBin-2.2.3
     ./autobuild_auxiliary
     cd auxiliary/hmmer-3.1b1/
     make install
@@ -26,5 +26,5 @@ From: ubuntu:16.04
     find -mindepth 1 -maxdepth 1 -executable -exec mv {} /usr/local/bin/ \;
     cd ../FragGeneScan1.30
     find -mindepth 1 -maxdepth 1 -executable -exec mv {} /usr/local/bin/ \;
-    cd ..
+    cd /home/MaxBin-2.2.3
     mv setting heatmap.r marker.hmm bacar_marker.hmm run_MaxBin.pl src _getmarker.pl _getabund.pl _sepReads.pl /usr/local/bin/
