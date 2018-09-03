@@ -17,8 +17,8 @@ From: ubuntu:16.04
 	wget https://cran.r-project.org/bin/linux/ubuntu/xenial/r-base-core_3.2.5-1xenial_amd64.deb
     apt -y install ./r-base-core_3.2.5-1xenial_amd64.deb
     
-    R --vanilla -e """packages = c("Rcpp", "MASS", "mixtools", "doParallel", "foreach", "seqinr", "getopt")
-    install.packages(packages, dependencies=T, repo="http://cran.univ-paris1.fr/")"""
+    R --vanilla -e """packages = c('Rcpp', 'MASS', 'mixtools', 'doParallel', 'foreach', 'seqinr', 'getopt')
+    install.packages(packages, dependencies=T, repo='http://cran.univ-paris1.fr/')"""
     
     wget https://github.com/BioAlgs/MetaGen/archive/master.zip
     unzip master.zip
