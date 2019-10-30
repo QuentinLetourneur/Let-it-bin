@@ -194,18 +194,18 @@ if( params.contaminant != "" && params.reads != " ") {
     readChannel = Channel.fromFilePairs("${params.reads}/*{1,2}.{fastq,fq}")
                  .ifEmpty { exit 1, "Cannot find any reads file in ${params.reads}" }
                  //.subscribe { println it }
-    
+
     // Map reads on the genome(s) of organisms that could have been sequenced along the wanted DNA.
     // Only reads that don't map on it will be kept
     process filtering {
         cpus params.cpus
-        
+
         input:
         set pair_id, file reads from readChannel
-        
+
         output:
         set pair_id, file("unmapped/*.1"), file("unmapped/*.2") into unmappedChannel
-        
+
         shell:
         """
         export LC_ALL=C
@@ -213,18 +213,18 @@ if( params.contaminant != "" && params.reads != " ") {
         bowtie2 -q -N !{params.mismatch} -1 !{reads[0]} -2 !{reads[1]} -x ${params.contaminant} --un-conc unmapped/ -S /dev/null -p !{params.cpus} --very-sensitive-local
         """
     }
-    
+
     // reads cleaning
-    process trimming {
-        
+    process trimming_rr {
+
         input:
         set pair_id, file(forward), file(reverse) from unmappedChannel
-        
+
         output:
         set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into trimChannel
         set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into mappingChannel
         file("*alien*.fastq") into outChannel mode flatten
-        
+
         script:
         """
         AlienTrimmer -if ${forward} -ir ${reverse} -of ${pair_id}_alien_1.fastq \
@@ -240,18 +240,18 @@ else if( file("${params.cleaned_readsDir}/*.f*q").size < params.nb_samples && pa
 
     readChannel = Channel.fromFilePairs("${params.reads}/*{1,2}.{fastq,fq}")
                  .ifEmpty { exit 1, "Cannot find any reads matching: ${params.reads}" }
-    
+
     // reads cleaning
-    process trimming {
-        
+    process trimming_fr {
+
         input:
         set pair_id, file(reads) from readChannel
-        
+
         output:
         set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into trimChannel
         set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into mappingChannel
         file("*alien*.fastq") into outChannel mode flatten
-        
+
         script:
         """
         AlienTrimmer -if ${reads[0]} -ir ${reads[1]} -of ${pair_id}_alien_1.fastq \
@@ -268,19 +268,19 @@ else {
 
 // Perform a co-assembly
 if( params.contigs == "" && params.multi_assembly == "F" ) {
-    
+
     if( params.filt_readsDir == "" ) {
         // filter reads redoudancy and even their aboudance
-        process khmer {
+        process khmer_ca {
             cpus params.cpus
-            
+
             input:
             set pair_id, file(fw), file(rv) from trimChannel
-            
+
             output:
             file("*_filt_1.fastq") into R1_Channel
             file("*_filt_2.fastq") into R2_Channel
-            
+
             script:
             """
             interleave-reads.py ${fw} ${rv} --output interleaved.pe
@@ -300,24 +300,24 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
 
     // Pull all the forward/reverse reads together to make a co-assembly
     process merge {
-        
+
         input:
         file R1 from R1_Channel.toList()
         file R2 from R2_Channel.toList()
-        
+
         output:
         set val("mergefstq"), file("mergefstq_1.fastq"), file("mergefstq_2.fastq") into mergeChannel
-        
+
         shell:
         """
         cat !{R1} > mergefstq_1.fastq
         cat !{R2} > mergefstq_2.fastq
         """
     }
-    
-    process assembly {
+
+    process assembly_co {
         publishDir "$myDir", mode: 'copy'
-        
+
         if(params.mode != "ray") {
             cpus params.cpuassembly
             if(params.memassembly <= '160000') {
@@ -328,7 +328,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             else {
                 memory params.memassembly
             }
-            
+
             if(params.mode == "clc") {
                 queue 'clcbio'
                 clusterOptions="--qos=clcbio"
@@ -342,10 +342,10 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             clusterOptions="--qos=${params.qos_assembly}"
             exitReadTimeout = '604800sec'
         }
-        
+
         input:
         set pair_id, file(forward), file(reverse) from mergeChannel
-        
+
         output:
         file("assembly/*_{spades,clc,megahit,ray}.fasta") into assemblyChannel
         file("assembly/*_{spades,clc,megahit,ray}.fasta") into assemblyChannel_2
@@ -360,7 +360,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         file("assembly/*_{spades,clc,megahit,ray}.fasta") into assemblyChannel_11
         file("assembly/*_{spades,clc,megahit,ray}.fasta") into assemblyChannel_12
         file("assembly/*_{spades,clc,megahit,ray}.fasta") into assemblyChannel_13
-        
+
         shell:
         """
         #!/bin/bash
@@ -389,15 +389,15 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         fi
         """
     }
-    
+
     if( params.sim_data == "T" && params.blast_db != "" && params.link_ref_id_species != "" ) {
-        
+
         process contigs_annotation {
             cpus params.cpus
-            
+
             input:
             file assembly from assemblyChannel_12
-            
+
             output:
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_2
@@ -409,7 +409,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_8
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_9
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_10
-            
+
             shell:
             """
             infile=`echo !{assembly} | cut -f 1 -d "."`
@@ -420,9 +420,9 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
                    -max_target_seqs !{params.hit}
 
             ExtractAnnotation.py -f "blast_"\$infile"_on_refs.txt" -a !{params.link_ref_id_species} -o "annotation_"\$infile".txt" -nb 1 -r . -fc !{params.coverage} -fi !{params.identity}
-            
+
             Rscript /usr/local/bin/sum_contigs_length_per_annotation.R "annotation_"\$infile".txt" sum_contigs_length_per_annotation.tsv
-            
+
             cp "blast_"\$infile"_on_refs.txt" "annotation_"\$infile".txt" sum_contigs_length_per_annotation.tsv !{params.out}/assembly
             """
         }
@@ -431,13 +431,13 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         // annotate contigs on a public database (in progress)
         process contigs_annotation_rd {
             cpus params.cpus
-            
+
             input:
             file assembly from assemblyChannel_12
-            
+
             output:
             file("contigs_annotation.txt") into annotationChannel
-            
+
             shell:
             """
             blastn -query !{assembly} -out blast_contigs_on_refs.txt -outfmt \
@@ -445,7 +445,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
                        -db !{params.blast_db} \
                        -evalue !{params.evalue} -num_threads !{params.cpus} \
                        -max_target_seqs !{params.hit}
-            
+
             # Annot ncbi
             fasta_bn=`echo \$infile | cut -f 1,2 -d "." | cut -f 1 -d "_"`
             python get_taxonomy.py -i !{assembly} \
@@ -454,7 +454,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             python ExtractNCBIDB.py \
                     -f !{assembly} -g \$fasta_bn"_taxonomy.txt" -fc !{params.coverage} \
                     -o \$fasta_bn"_annotation.txt" -nb 1 -fi
-            
+
             # Get not annotated sequences
             if [ -f \$fasta_bn"_catalogue_annotation.txt" ]; then
                 cat  \$fasta_bn"_annotation.txt" \$fasta_bn"_catalogue_annotation.txt"\
@@ -470,11 +470,11 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         }
     }
     else if( params.sim_data == "F" && params.blast_db == "" ) {
-        process decoy {
-            
+        process decoy_2 {
+
             input:
             file assemby from assemblyChannel_12
-            
+
             output:
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_2
@@ -486,7 +486,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_8
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_9
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_10
-            
+
             shell:
             """
             touch sum_contigs_length_per_annotation.tsv decoy_annotation.txt
@@ -500,19 +500,19 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
 
 // perform a multi-assembly (to finish)
 else if( params.contigs == "" && params.multi_assembly == "T" ) {
-    
+
     if( params.filt_readsDir == "" ) {
         // filter reads singleton and reduce abundance of highly represented reads
-        process khmer {
+        process khmer_ma {
             cpus params.cpus
-            
+
             input:
             set pair_id, file(fw), file(rv) from trimChannel
-            
+
             output:
             set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
             file("interleaved.pe") into conv_fastqChannel
-            
+
             script:
             """
             interleave-reads.py ${fw} ${rv} --output interleaved.pe
@@ -529,11 +529,11 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         R1_Channel = Channel.fromPath("${params.filt_readsDir}/*filt_1.{fastq,fq}").ifEmpty { exit 1, "No forward filt reads found in ${params.filt_readsDir}"}
         R2_Channel = Channel.fromPath("${params.filt_readsDir}/*filt_2.{fastq,fq}").ifEmpty { exit 1, "No reverse filt reads found in ${params.filt_readsDir}"}
     }
-    
+
     // make an assembly per sample
-    process assembly {
+    process assembly_mult {
         publishDir "$myDir", mode: 'copy'
-        
+
         if(params.mode != "ray") {
             cpus params.cpuassembly
             memory "70G"
@@ -541,7 +541,7 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         else {
             cpus 1
         }
-        
+
         if(params.mode == "clc") {
             queue 'clcbio'
             clusterOptions='--qos=${params.qos_assembly}'
@@ -552,15 +552,15 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         //~ else if(params.mode == "minia" || params.mode == "megahit" || params.mode == "ray"){
             //~ clusterOptions='--qos=long'
         //~ }
-        
+
         input:
         //~ set pair_id, file(forward), file(reverse) from khmerChannel
         set pair_id, file(reads) from skiptrimChannel
-        
+
         output:
         file("assembly/*_{spades,clc,minia,megahit,ray}.fasta") into contigsChannel
         //file("assembly/*_{spades,clc,minia}.fasta") into contigsChannel_2
-        
+
         shell:
         """
         mkdir assembly
@@ -591,16 +591,16 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
             //~ #!{baseDir}/gatb-minia-pipeline/gatb -1 !{forward} -2 !{reverse} -o assembly/!{pair_id}_gatb
             //~ #mv  assembly/!{pair_id}.contigs.fa assembly/!{pair_id}_minia.fasta
     }
-    
+
     // Pull all the generated contigs together and filter their redundancy
     process cdhit {
         publishDir "$myDir/assembly", mode: 'copy'
         cpus params.cpus
         clusterOptions='--qos=normal -p common'
-        
+
         input:
         file contigs from contigsChannel.toList()
-        
+
         output:
         file("cata_contig_nr.fasta") into assemblyChannel
         file("cata_contig_nr.fasta") into assemblyChannel_2
@@ -615,7 +615,7 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
         file("cata_contig_nr.fasta") into assemblyChannel_11
         file("cata_contig_nr.fasta") into assemblyChannel_12
         file("cata_contig_nr.fasta") into assemblyChannel_13
-        
+
         shell:
         """
         cat !{contigs} > cata_contigs.fasta
@@ -643,56 +643,56 @@ else {
     else {
         exit 1, "${params.contigs} is not a file"
     }
-    
+
     if( params.sim_data == "T" ) {
         if( file("${params.refs_info}").isFile() && file("${params.contigs_annotation}").isFile() ) {
             annotationChannel = Channel.fromPath("${params.contigs_annotation}").ifEmpty { exit 1, "Cannot find the contigs annotation file : ${params.contigs_annotation}"}
             annot_by_ref_infosChannel = Channel.fromPath("${params.refs_info}").ifEmpty { exit 1, "Cannot find the references informations file : ${params.refs_info}"}
             annotationAndInfosByRefChannel = annot_by_ref_infosChannel.concat(annotationChannel).collect()
-            
+
             annotationChannel_2 = Channel.fromPath("${params.contigs_annotation}")
             annot_by_ref_infosChannel_2 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_2 = annot_by_ref_infosChannel_2.concat(annotationChannel_2).collect()
-            
+
             annotationChannel_3 = Channel.fromPath("${params.contigs_annotation}")
             annot_by_ref_infosChannel_3 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_3 = annot_by_ref_infosChannel_3.concat(annotationChannel_3).collect()
-            
+
             annotationChannel_4 = Channel.fromPath("${params.contigs_annotation}")
             annot_by_ref_infosChannel_4 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_4 = annot_by_ref_infosChannel_4.concat(annotationChannel_4).collect()
-            
+
             annotationChannel_5 = Channel.fromPath("${params.contigs_annotation}")
             annot_by_ref_infosChannel_5 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_5 = annot_by_ref_infosChannel_5.concat(annotationChannel_5).collect()
-            
+
             annotationChannel_6 = Channel.fromPath("${params.contigs_annotation}")
             annot_by_ref_infosChannel_6 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_6 = annot_by_ref_infosChannel_6.concat(annotationChannel_6).collect()
-            
+
             annotationChannel_7 = Channel.fromPath("${params.contigs_annotation}")
             annot_by_ref_infosChannel_7 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_7 = annot_by_ref_infosChannel_7.concat(annotationChannel_7).collect()
-            
+
             annotationChannel_8 = Channel.fromPath("${params.contigs_annotation}")
             annot_by_ref_infosChannel_8 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_8 = annot_by_ref_infosChannel_8.concat(annotationChannel_8).collect()
-            
+
             annotationChannel_9 = Channel.fromPath("${params.contigs_annotation}")
             annot_by_ref_infosChannel_9 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_9 = annot_by_ref_infosChannel_9.concat(annotationChannel_9).collect()
-            
+
             annotationChannel_10 = Channel.fromPath("${params.contigs_annotation}")
             annot_by_ref_infosChannel_10 = Channel.fromPath("${params.refs_info}")
             annotationAndInfosByRefChannel_10 = annot_by_ref_infosChannel_10.concat(annotationChannel_10).collect()
         }
     }
     else {
-        process decoy {
-            
+        process decoy_1 {
+
             input:
             file assemby from assemblyChannel_12
-            
+
             output:
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_2
@@ -704,7 +704,7 @@ else {
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_8
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_9
             set file("sum_contigs_length_per_annotation.tsv"), file("*_annotation.txt") into annotationAndInfosByRefChannel_10
-            
+
             shell:
             """
             touch sum_contigs_length_per_annotation.tsv decoy_annotation.txt
@@ -717,18 +717,18 @@ bowt_refDir = file(params.bowtie2_indexDir)
 bowt_refDir.mkdirs()
 
 if( file("${params.bamDir}/*.bam").size == 0 &&  params.index_prefix != "" && (! file("${params.bowtie2_indexDir}/${params.index_prefix}.1.bt2").exists() && ! file("${params.bowtie2_indexDir}/${params.index_prefix}.rev.2.bt2").exists() )) {
-    
+
     // generate bowtie2 index of the contigs
     process bowtie2_index {
         publishDir "$bowt_refDir", mode: 'copy'
         cpus params.cpus
-        
+
         input:
         file assembly from assemblyChannel
-        
+
         output:
         file("*.bt2") into indexChannel
-        
+
         shell:
         """
         if [ `grep -v "^>" !{assembly} | wc -c` -lt \$((2**32)) ];then
@@ -744,16 +744,16 @@ else {
 }
 
 if( file("${params.bamDir}/*.bam").size < params.nb_samples && params.index_prefix != "" ) {
-    
+
     // map cleaned reads on the contigs
     process mapping_count {
         cpus params.cpumapping
         memory "${params.memmapping} MB"
-        
+
         input:
         set pair_id, file(reads_1), file(reads_2) from mappingChannel
         file idx from indexChannel.first()
-        
+
         output:
         file("bam/sorted*.bam") into sortedChannel mode flatten
         file("bam/sorted*.bam") into sortedChannel_2 mode flatten
@@ -762,15 +762,15 @@ if( file("${params.bamDir}/*.bam").size < params.nb_samples && params.index_pref
         file("bam/sorted*.bam") into sortedChannel_5
         file("bam/sorted*.bam") into sortedChannel_6
         file("comptage/*.txt") into countsChannel
-        
+
         shell:
         """
         #!/bin/bash
-        
+
         export LC_ALL=C
-        
+
         mkdir -p !{params.out}/mapping/{bam,comptage,out,unmapped}
-        
+
         function timer()
         {
             if [[ \$# -eq 0 ]]; then
@@ -786,25 +786,25 @@ if( file("${params.bamDir}/*.bam").size < params.nb_samples && params.index_pref
                 printf '%d:%02d:%02d' \$dh \$dm \$ds
             fi
         }
-        
+
         mkdir unmapped out comptage bam sam
-        
+
         echo "Mapping files: !{reads_1} & !{reads_2}"
         echo "Mapping with bowtie2 started at \$(date +"%T")"
         start_time=\$(timer)
-        
+
         bowtie2 -p !{params.cpumapping} -x !{params.bowtie2_indexDir}/!{params.index_prefix} -q --local --sensitive-local -1 !{reads_1} -2 !{reads_2} --un-conc unmapped/!{pair_id} -S sam/!{pair_id}.sam > out/!{pair_id}.txt 2>&1
-        
+
         echo "Elapsed time : \$(timer \$start_time)"
-        
+
         start_time_count=\$(timer)
         echo "Count table creation started at \$(date +"%T")"
-        
+
         counting.py sam/!{pair_id}.sam comptage/!{pair_id}.txt --best -m !{params.memmapping} -t !{params.cpumapping}
-        
+
         echo "Elapsed time : \$(timer \$start_time_count)"
         echo "Total duration :  \$(timer \$start_time)"
-            
+
         rm bam/filtered*
         find ./bam -maxdepth 1 -type f ! -iname sorted*.bam -delete
         cp bam/* !{params.out}/mapping/bam/
@@ -815,7 +815,7 @@ if( file("${params.bamDir}/*.bam").size < params.nb_samples && params.index_pref
     }
 }
 else if( file("${params.bamDir}/sorted*.bam").size == params.nb_samples.toInteger() && (params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || params.metabat != " " || params.metagen != " " || params.binsanity != " " || params.metabat2 != " " || params.all == "T") ) {
-    
+
     sortedChannel = Channel.fromPath("${params.bamDir}/sorted*.bam").ifEmpty { exit 1, "Cannot find any sorted BAM files in : ${params.bamDir}" }
     sortedChannel_2 = Channel.fromPath("${params.bamDir}/sorted*.bam")
     sortedChannel_3 = Channel.fromPath("${params.bamDir}/sorted*.bam")
@@ -829,24 +829,24 @@ else {
 }
 
 if( (params.canopy != " " || params.all == "T") && params.count_matrix == "" ) {
-    
+
     process count_matrix {
-        
+
         input:
         file counts from countsChannel.toList()
-        
+
         output:
         file("count_matrix.txt") into count_matrixChannel
-        
+
         shell:
         """
         if [ -e !{params.out}/mapping/comptage/count_matrix.txt ];then
             rm !{params.out}/mapping/comptage/count_matrix.txt
         fi
-        
+
         count_matrix.py -d !{params.out}/mapping/comptage -o count_matrix.txt
         summarise_mapping_PE.sh !{params.out}/mapping !{params.out}/mapping/stats_mapping.tsv
-        
+
         cp count_matrix.txt !{params.out}/mapping/comptage
         """
     }
@@ -864,18 +864,18 @@ else if( (params.canopy != " " || params.all == "T") && params.count_matrix != "
 // }
 
 if( params.metagen != " " || params.binsanity != " " || params.all == "T" ) {
-    
+
     if( file("${params.bamDir}/*.bai").size == 0 || file("${params.bamDir}/*.bai").size < params.nb_samples ) {
         process index_bam {
-        
+
             input:
             file sort_bam from sortedChannel
-            
+
             output:
             file("*.bai") into indexedChannel
             file("*.bai") into indexedChannel_2
             file("*.bai") into indexedChannel_3
-            
+
             shell:
             """
             samtools index !{sort_bam} !{sort_bam}.bai
@@ -894,16 +894,16 @@ if( params.metagen != " " || params.binsanity != " " || params.all == "T" ) {
 }
 
 if( params.metagen != " " || params.all == "T" ) {
-    
+
     process idxstat {
-        
+
         input:
         file sort_bam from sortedChannel_6
         file idx_bam from indexedChannel.toList()
-        
+
         output:
         file("*.stat") into statChannel
-        
+
         shell:
         """
         samtools idxstats !{sort_bam} > !{sort_bam}.stat
@@ -912,35 +912,35 @@ if( params.metagen != " " || params.all == "T" ) {
 }
 
 if( params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || params.all == "T" ) {
-    
+
     // generate converage files from the alignment files
     process gen_cov_bed {
-        
+
         input:
         file bam_sorted from sortedChannel_2
-        
+
         output:
         file("*.gcbout") into gen_cov_bedChannel
-        
+
         shell:
         """
         bn=`echo !{bam_sorted} | cut -f1 -d "."`
         genomeCoverageBed -ibam !{bam_sorted} > \$bn.gcbout
         """
     }
-    
+
     // make abundance tables based on the coverage files
     process abun_and_link_profile {
-        
+
         input:
         file bed_file from gen_cov_bedChannel.toList()
         file assembly from assemblyChannel_2
-        
+
         output:
         file("covTable.tsv") into abundanceProfileChannel
         file("covTable.tsv") into abundanceProfileChannel_2
         file("covTable.tsv") into abundanceProfileChannel_3
-        
+
         shell:
         """
         gen_input_table.py !{assembly} !{bed_file} --isbedfiles > covTable.tsv
@@ -949,17 +949,17 @@ if( params.concoct != " " || params.cocacola != " " || params.maxbin!= " " || pa
 }
 
 if( params.metabat != " " || params.metabat2 != " " || params.all == "T" ) {
-    
+
     // make abundance file for metabat
     process jgi_summa_depths {
-        
+
         input:
         file bams from sortedChannel_3.toList()
-        
+
         output:
         file("depth.txt") into abunChannel
         file("depth.txt") into abunChannel_2
-        
+
         shell:
         """
         jgi_summarize_bam_contig_depths --outputDepth depth.txt !{bams}
@@ -969,40 +969,40 @@ if( params.metabat != " " || params.metabat2 != " " || params.all == "T" ) {
 
 if( params.canopy != " " || params.all == "T" ) {
     file(params.canopyDir).mkdirs()
-    
+
     process Canopy {
         cpus params.cpubinning
-        
+
         input:
         file count_mat from count_matrixChannel
         file assembly from assemblyChannel_8
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_2
-        
+
         output:
         set val("Canopy"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into canopyChannel
         val("a") into canopyChannel_2
         val("Canopy") into canopyChannel_3
         file("*clustering.tsv") into canopyChannel_4
-        
+
         shell:
         '''
         sed -r s/'(\t[0-9]+)\\.[0-9]+'/'\\1'/g !{count_mat} > tmp.txt
         awk -v min_size=!{params.min_contig_length} '\$2 >= min_size {print \$0}' tmp.txt > tmp2.txt
         tail -n +2 tmp2.txt | cut -f 1,3- -d $'\t' > count_matrix_gt1000.tsv
         #tail -n +2 tmp.txt | cut -f 1,3- -d $'\t' > count_matrix.tsv
-        
+
         cc.bin -n !{params.cpubinning} -i count_matrix_gt1000.tsv -o cluster.out
-        
+
         sed -i "s/>//" cluster.out
         nb_clust=`cut -f 1 cluster.out | uniq | wc -l`
         for clust in `seq $nb_clust`;do
             grep -P "CAG0*$clust\t" cluster.out | cut -f 2 > list.txt
             extract_fasta_from_list.py !{assembly} list.txt bin.$clust.fa
         done
-        
+
         awk -F \$'\t' '{print \$2,\$1}' OFS=\$'\t' cluster.out > canopy_clustering.tsv
         sed -i 's/CAG/Canopy_bin./' canopy_clustering.tsv
-        
+
         cp bin* !{params.canopyDir}
         '''
     }
@@ -1016,34 +1016,34 @@ else {
 
 if( params.maxbin != " " || params.all == "T" ) {
     file(params.maxbinDir).mkdirs()
-    
+
     process maxbin {
         cpus params.cpubinning
-        
+
         input:
         file assembly from assemblyChannel_7
         file abun from abundanceProfileChannel_3
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_3
-        
+
         output:
         set val("MaxBin"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into maxbinChannel
         val("a") into maxbinChannel_2
         val("MaxBin") into maxbinChannel_3
         file("*clustering.tsv") into maxbinChannel_4
-        
+
         shell:
         """
         nb_col=`awk '{print NF; exit}' !{abun}`
         split_abun_file.sh !{abun} \$nb_col
         ls cov_mean* > list_abun_files.txt
-        
+
         run_MaxBin.pl -contig !{assembly} -out out -abund_list list_abun_files.txt -thread !{params.cpubinning} -min_contig_length !{params.min_contig_length}
-        
+
         for file in `ls out.*.fasta`;do
             name=`echo \$file | cut -f 1,2 -d "." | sed 's/out/bin/'`
             mv \$file \$name.fa
         done
-        
+
         for file in `ls *.fa`;do
             bn=`basename \$file .fa`
             grep "^>" \$file | sed 's/>//' > tmp_\$bn
@@ -1051,7 +1051,7 @@ if( params.maxbin != " " || params.all == "T" ) {
         done
         cat tmp* > maxbin_clustering.tsv
         rm tmp*
-        
+
         cp bin* !{params.maxbinDir}
         """
     }
@@ -1065,21 +1065,21 @@ else {
 
 if( params.metabat != " " || params.all == "T" ) {
     file(params.metabatDir).mkdirs()
-    
+
     process Metabat {
         cpus params.cpubinning
-        
+
         input:
         file assembly from assemblyChannel_3
         file depth from abunChannel
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_4
-        
+
         output:
         set val("Metabat"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into metabatChannel
         val("a") into metabatChannel_2
         val("Metabat") into metabatChannel_3
         val("*clustering.tsv") into metabatChannel_4
-        
+
         shell:
         """
         if [ "!{params.min_contig_length}" -le "1500" ];then
@@ -1087,7 +1087,7 @@ if( params.metabat != " " || params.all == "T" ) {
         else
             metabat1 -i !{assembly} -a depth.txt -o bin -t !{params.cpubinning} -m !{params.min_contig_length} --seed 10
         fi
-        
+
         for file in `ls *.fa`;do
             bn=`basename \$file .fa`
             grep "^>" \$file | sed 's/>//' > tmp_\$bn
@@ -1095,7 +1095,7 @@ if( params.metabat != " " || params.all == "T" ) {
         done
         cat tmp* > metabat_clustering.tsv
         rm tmp*
-        
+
         cp bin* !{params.metabatDir}
         """
     }
@@ -1109,21 +1109,21 @@ else {
 
 if( params.metabat2 != " " || params.all == "T" ) {
     file(params.metabat2Dir).mkdirs()
-    
+
     process Metabat2 {
         cpus params.cpubinning
-        
+
         input:
         file assembly from assemblyChannel_13
         file depth from abunChannel_2
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_5
-        
+
         output:
         set val("Metabat2"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into metabat2Channel
         val("a") into metabat2Channel_2
         val("Metabat2") into metabat2Channel_3
         val("*clustering.tsv") into metabat2Channel_4
-        
+
         shell:
         """
         if [ "!{params.min_contig_length}" -le "1500" ];then
@@ -1131,7 +1131,7 @@ if( params.metabat2 != " " || params.all == "T" ) {
         else
             metabat2 -i !{assembly} -a depth.txt -o bin -t !{params.cpubinning} -m !{params.min_contig_length} --seed 10
         fi
-        
+
         for file in `ls *.fa`;do
             bn=`basename \$file .fa`
             grep "^>" \$file | sed 's/>//' > tmp_\$bn
@@ -1139,7 +1139,7 @@ if( params.metabat2 != " " || params.all == "T" ) {
         done
         cat tmp* > metabat2_clustering.tsv
         rm tmp*
-        
+
         cp bin* !{params.metabat2Dir}
         """
     }
@@ -1153,33 +1153,33 @@ else {
 
 if( params.concoct != " " || params.all == "T" ) {
     file(params.concoctDir).mkdirs()
-    
+
     process CONCOCT {
-        
+
         input:
         file assembly from assemblyChannel_4
         file abun_prof from abundanceProfileChannel
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_6
-        
+
         output:
         set val("Concoct"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into concoctChannel
         val("a") into concoctChannel_2
         val("Concoct") into concoctChannel_3
         file("*clustering.tsv") into concoctChannel_4
-        
+
         shell:
         """
         cut -f1,3- !{abun_prof} > covTableR.tsv
         concoct -c !{params.nb_cluster} --coverage_file covTableR.tsv --composition_file !{assembly} -b Concoct/ -l !{params.min_contig_length}
-        
+
         nb_clust=`sort -t "," -rnk2,2 Concoct/clustering_gt1000.csv | head -n 1 | cut -f 2 -d ","`
         for clust in `seq 0 \$nb_clust`;do
             grep ",\$clust\$" Concoct/clustering_gt1000.csv | cut -f 1 -d "," > list.txt
             python /usr/local/bin/extract_fasta_from_list.py !{assembly} list.txt bin.\$clust.fa
         done
-        
+
         sed 's/,/\tConcoct_bin./' Concoct/clustering_gt1000.csv > concoct_clustering.tsv
-        
+
         cp bin* !{params.concoctDir}
         """
     }
@@ -1193,21 +1193,21 @@ else {
 
 if( params.cocacola != " " || params.all == "T" ) {
     file(params.cocacolaDir).mkdirs()
-    
+
     process COCACOLA {
         cpus params.cpubinning
-        
+
         input:
         file abun_table from abundanceProfileChannel_2
         file assembly from assemblyChannel_5
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_7
-        
+
         output:
         set val("Cocacola"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into cocacolaChannel
         val("a") into cocacolaChannel_2
         val("Cocacola") into cocacolaChannel_3
         file("*clustering.tsv") into cocacolaChannel_4
-        
+
         shell:
         """
         echo "Generating coverage table ..."
@@ -1215,26 +1215,26 @@ if( params.cocacola != " " || params.all == "T" ) {
         tail -n +2 !{abun_table} | awk -v min_size=!{params.min_contig_length} '\$2 >= min_size {print \$0}' !{abun_table} >> covtable_gt"!{params.min_contig_length}".tsv
         tail -n +2 covtable_gt"!{params.min_contig_length}".tsv | awk '{print \$1}' > headers.txt
         echo "Done"
-        
+
         echo "Generating kmer table ..."
         nb_contigs=`grep "^>" !{assembly} | wc -l`
         fasta_to_features.py !{assembly} \$nb_contigs 4 kmer_4.csv
         head -n1 kmer_4.csv > kmer_4_gt"!{params.min_contig_length}".csv
         grep -Fwf headers.txt kmer_4.csv >> kmer_4_gt"!{params.min_contig_length}".csv
         echo "Done"
-        
+
         echo "Executing COCAOLA"
         cocacola.py --contig_file !{assembly} --abundance_profiles covtable_gt"!{params.min_contig_length}".tsv --composition_profiles kmer_4_gt"!{params.min_contig_length}".csv --out result_gt"!{params.min_contig_length}".csv --aux_dir /home/COCACOLA-python --threads !{params.cpubinning}
         echo "Done"
-        
+
         num_clust=`sort -unk2,2 -t "," result_gt"!{params.min_contig_length}".csv | cut -f 2 -d ","`
         for clust in \$num_clust; do
             grep ",\$clust\$" result_gt"!{params.min_contig_length}".csv | cut -f 1 -d "," > list.txt
             python /usr/local/bin/extract_fasta_from_list.py !{assembly} list.txt bin.\$clust.fa
         done
-        
+
         sed 's/,/\tCocacola_bin./' result_gt"!{params.min_contig_length}".csv > cocacola_clustering.tsv
-        
+
         cp bin* !{params.cocacolaDir}
         """
     }
@@ -1247,47 +1247,47 @@ else {
 }
 
 if( params.metagen != " " || params.all == "T" ) {
-    
+
     file(params.metagenDir).mkdirs()
-    
+
     process MetaGen {
         cpus params.cpubinning
-        
+
         input:
         file assembly from assemblyChannel_10
         file count from statChannel.toList()
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_8
-        
+
         output:
         set val("MetaGen"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into metagenChannel
         val("a") into metagenChannel_2
         val("MetaGen") into metagenChannel_3
         file("*clustering.tsv") into metagenChannel_4
-        
+
         shell:
         """
         mkdir map output contigs reads
         ln !{assembly} contigs/Contigs.fasta
-        
+
         for f in !{count};do
             bn=`basename \$f .bam.stat`
             mkdir map/\$bn
             ln \$f map/\$bn/count.dat
         done
-        
+
         /home/MetaGen-master/script/combine-counts.sh -p .
         /home/MetaGen-master/script/sum-reads.sh -p !{params.cleaned_readsDir} .
         Rscript /home/MetaGen-master/R/metagen.R -w . -n !{params.cpubinning} -l !{params.min_contig_length} -o !{params.auto_method} -s !{params.bic_step} -m /home/MetaGen-master
-        
+
         sed -i -e 's/"//g' -e 's/>//' -e 's/ /,/' output/segs.txt
         num_clust=`sort -unk2,2 -t "," output/segs.txt | cut -f 2 -d ","`
         for clust in \$num_clust;do
             grep ",\$clust\$" output/segs.txt | cut -f 1 -d "," > list.txt
             extract_fasta_from_list.py !{assembly} list.txt bin.\$clust.fa
         done
-        
+
         sed 's/,/\tMetagen_bin./' output/segs.txt > metagen_clustering.tsv
-        
+
         cp bin* !{params.metagenDir}
         """
     }
@@ -1300,36 +1300,36 @@ else {
 }
 
 if( params.binsanity != " " || params.all == "T" ) {
-    
+
     file(params.binsanityDir).mkdirs()
-    
+
     process Binsanity_wf {
         cpus params.cpubinning
-        
+
         input:
         file assembly from assemblyChannel_11
         file sorted_bam from sortedChannel_5.toList()
         file bam_index from indexedChannel_3.toList()
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_9
-        
+
         output:
         set val("BinSanity-wf"), file("${refs_info}"), file("${contigs_annot}"), file("*.fa") into binsanityChannel
         val("a") into binsanityChannel_2
         val("BinSanity-wf") into binsanityChannel_3
         file("*clustering.tsv") into binsanityChannel_4
-        
+
         shell:
         """
         #source /local/gensoft2/exe/conda/3.19.0/conda/bin/activate envbinsanity
         get-ids -f "" -l !{assembly} -o ids.txt -x !{params.min_contig_length}
         Binsanity-profile -i !{assembly} -s . --ids ids.txt -c matrix -T !{params.cpubinning}
         Binsanity-wf -f "" -l !{assembly} -o . --threads !{params.cpubinning} --binPrefix "" -c matrix.cov
-        
+
         for infile in `ls BinSanity-Final-bins/*.fna`; do
             nn=`echo \$infile | cut -f 2 -d "/" | sed -e 's/^_//' -e 's/\\.fna/\\.fa/'`
             mv \$infile ./\$nn
         done
-        
+
         for infile in `ls *.fa`;do
             bn=`basename \$file .fa`
             grep "^>" \$file | sed 's/>//' > tmp_\$bn
@@ -1337,7 +1337,7 @@ if( params.binsanity != " " || params.all == "T" ) {
         done
         cat tmp* > binsanity-wf_clustering.tsv
         rm tmp*
-        
+
         cp *.fa !{params.binsanityDir}
         """
     }
@@ -1350,12 +1350,12 @@ else {
 }
 
 if( params.dastool == "T" ) {
-    
+
     file(params.dastoolDir).mkdirs()
-    
+
     process dastool {
         cpus params.cpus
-        
+
         input:
         file inp1 from canopyChannel_4
         file inp2 from maxbinChannel_4
@@ -1367,11 +1367,11 @@ if( params.dastool == "T" ) {
         file inp8 from binsanityChannel_4
         file assembly from assemblyChannel_6
         set file(refs_info), file(contigs_annot) from annotationAndInfosByRefChannel_10
-        
+
         output:
         set val("Dastool"), file("${refs_info}"), file("${contigs_annot}"), file("out_DASTool_bins/*.fa") into dastoolChannel
         val("Dastool") into dastoolChannel_2
-        
+
         shell:
         """
         input=""
@@ -1384,7 +1384,7 @@ if( params.dastool == "T" ) {
                 fi
             fi
         done
-        
+
         DAS_Tool -i \$input -c !{assembly} -o ./out --score_threshold 0 --write_bins 1 -t !{params.cpus} --search_engine blast
         """
     }
@@ -1399,53 +1399,53 @@ checkmInputChannel = canopyChannel_3.mix(maxbinChannel_3, metabatChannel_3, meta
 // evaluate the quality of the bins generated by the chosen binning softwares
 process checkm {
     cpus params.cpus
-    
+
     input:
     val(soft) from checkmInputChannel
-    
+
     output:
     file("chkm_res/tree_qa+qa.tsv") into checkmChannel
     val("plup") into resumeChannel_2
-    
+
     shell:
     '''
     if ! mkdir chkm_res 2>/dev/null ; then
         rm -r chkm_res
         mkdir chkm_res
     fi
-    
+
     mkdir -p !{params.tmp_checkm}/!{soft}
-    
+
     checkm tree -t !{params.cpus} -x fa --tmpdir !{params.tmp_checkm}/!{soft} !{params.binDir}/!{soft} chkm_res
     checkm tree_qa -f chkm_res/tree_qa.tsv --tab_table --tmpdir !{params.tmp_checkm}/!{soft} chkm_res
     checkm lineage_set --tmpdir !{params.tmp_checkm}/!{soft} chkm_res chkm_res/lineage.ms
     checkm analyze -t !{params.cpus} --tmpdir !{params.tmp_checkm}/!{soft} -x fa chkm_res/lineage.ms !{params.binDir}/!{soft} chkm_res
     checkm qa -t !{params.cpus} -f chkm_res/qa_res.tsv --tab_table --tmpdir !{params.tmp_checkm}/!{soft} chkm_res/lineage.ms chkm_res
-    
+
     echo -e 'Bin id\tTaxonomy\tMarker lineage\t# genomes\t# markers\tmarker sets\t0\t1\t2\t3\t4\t5+\tCompleteness\tContamination\tStrain heterogeneity' > chkm_res/tree_qa+qa.tsv
     join -t $'\t' -1 1 -2 1 -o 1.1,1.4,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,2.10,2.11,2.12,2.13,2.14 <(tail -n +2 chkm_res/tree_qa.tsv | sort -k1,1) <(tail -n +2 chkm_res/qa_res.tsv | sort -k1,1) >> chkm_res/tree_qa+qa.tsv
-    
+
     cp -r chkm_res !{params.binDir}/!{soft}
     '''
 }
 
 if( params.sim_data == "T" ) {
-    
+
     AnnotInputChannel = canopyChannel.mix(maxbinChannel, metabatChannel, metagenChannel, metabat2Channel, binsanityChannel , concoctChannel, cocacolaChannel, dastoolChannel)
-    
+
     process annotation_by_bin {
-        
+
         input:
         set soft, file(refs_info), file(contigs_annot), file(bins) from AnnotInputChannel
-        
+
         output:
         set val(soft), file("${refs_info}"), file("*_annotation.txt") into annot_binChannel
-        
+
         script:
         """
         #!/bin/bash
         mkdir -p ${params.binDir}/${soft}/Annotation
-        
+
         for infile in ${bins};do
             bin_name=`basename \$infile .fa`
             tax_count=`wc -l < \$infile`
@@ -1456,7 +1456,7 @@ if( params.sim_data == "T" ) {
                 touch \$bin_name"_annotation.txt"
             fi
         done
-        
+
         cp *_annotation.txt ${params.binDir}/${soft}/Annotation
         """
     }
@@ -1467,14 +1467,14 @@ else if( params.sim_data == "T" && params.link_ref_id_species == "" ) {
 
 if( params.sim_data == "T" ) {
     process eval_complet_conta {
-        
+
         input:
         set val(soft), file(refs_info), file(annotations) from annot_binChannel
-        
+
         output:
         file("contamination.png") into evalChannel
         val("done") into resumeChannel
-        
+
         shell:
         """
         Rscript /usr/local/bin/binning_stats.R !{params.binDir}/!{soft}/ !{params.binDir}/!{soft} !{params.binDir}/!{soft}/Annotation !{refs_info} !{params.min_bin_size} !{params.plot_width} !{params.plot_heigth}
@@ -1487,14 +1487,14 @@ else {
 }
 
 process resume_res {
-    
+
     input:
     file prec_rec_blast from resumeChannel.toList()
     file prec_rec_checkm from resumeChannel_2.toList()
-    
+
     output:
     file("barplot*.png") into finishChannel
-    
+
     shell:
     """
     if [ "!{params.sim_data}" == "T" ];then
