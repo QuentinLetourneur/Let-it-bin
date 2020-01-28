@@ -86,10 +86,9 @@ def usage() {
     println("  --comp_threshold [FLOAT] Minimum completeness percent for good quality bins [0-1] (Default 0.6)")
     println("\n    EXAMPLES :\n")
     println("  For real data starting from raw reads or reads filtered from contaminant and co-assembly with Spades")
-    println("  ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files] let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data F --cpus 4\n  --scripts ~/let_it_bin/scripts --tmp_checkm ~/tmp --metabat --canopy --maxbin \n   --index_prefix spades_contigs")
+    println("  ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files] let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data F --cpus 4\n   --tmp_checkm ~/tmp --metabat --canopy --maxbin \n   --index_prefix spades_contigs")
     println("\n  For simulated data starting from raw reads and co-assembly with megahit")
-    println("  ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files] let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data T --cpus 4\n  --nb_ref 50 --scripts ~/let_it_bin/scripts --tmp_checkm ~/tmp\n  --metabat2 --cocacola --metagen --mode megahit\n  --blast_db ~/blast_db/refs_seq --link_ref_id_species ~/link_id_species.tsv\n  --index_prefix spades_contigs")
-    //println("  --nt")
+    println("  ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files] let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data T --cpus 4\n  --nb_ref 50 --tmp_checkm ~/tmp\n   --metabat2 --cocacola --metagen --mode megahit\n   --blast_db ~/blast_db/refs_seq --link_ref_id_species ~/link_id_species.tsv\n   --index_prefix spades_contigs")
 }
 
 if( params.help ) {

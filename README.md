@@ -9,7 +9,11 @@ You have to select the binning softwares that will run in the following list :
 You just have to prefix the name of the wanted programms with '--' (Ex : --concoct).
 If you want to use them all just use --all T
 
-When path are needed please give full path.
+When path are needed please give **full path**.
+
+If you run this pipeline on a cluster (what I recommend) you can use the given .config file to specify allocated memory per task and other cluster options. Memory values have been placed based on experience but can be changed.  
+Be it locally or on a cluster **be sure to add the full path to let-it-bin.simg** (more details in the next section) in the config file
+
 
 The output directory have the following layout :
 ```
@@ -23,6 +27,16 @@ The output directory have the following layout :
 |__khmer_res
 |__mapping
 ```
+## Prerequisites
+To run this pipeline you will need Nextflow and Singularity (tested with version 19.10.0.5170 and 3.5.0 respectively).  
+Here are the links to the installation instruction for [Nextflow](https://www.nextflow.io/docs/latest/getstarted.html) and [Singularity](https://github.com/sylabs/singularity/blob/master/INSTALL.md)
+
+### Building the Singulairty image
+A recipe file named Singularity is given.  
+To build the image on an unix system move to let-it-bin repository and lauch  
+`sudo singularity build let-it-bin.simg Singularity`  
+This will take at least an hour.
+
 ## Pipeline inputs and options
 ```
     GENERAL ARGUMENTS :
@@ -94,16 +108,18 @@ Else no retry will be done
   --min_bin_size [INT] Minimum size of bins in base (sum of the length of the sequences it contains) to be places in plots (Default 500000)
   --conta_threshold [FLOAT] Maximum contamination percent for good quality bins [0-1] (Default 0.1)
   --comp_threshold [FLOAT] Minimum completeness percent for good quality bins [0-1] (Default 0.6)
-
-    EXAMPLES :
-
-  For real data starting from raw reads or reads filtered from contaminant and co-assembly with Spades
-  ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files] let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data F --cpus 4
-  --scripts ~/let_it_bin/scripts --metabat --canopy --maxbin --index_prefix spades_contigs
-
-  For simulated data starting from raw reads and co-assembly with megahit
+```
+## Examples
+For real data starting from raw reads or reads filtered from contaminant and co-assembly with Spades.
+```
+  ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files]
+  let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data F --cpus 4
+  --metabat --canopy --maxbin --index_prefix spades_contigs
+```
+For simulated data starting from raw reads and co-assembly with megahit
+```
   ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files] let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data T --cpus 4
-  --nb_ref 50 --scripts ~/let_it_bin/scripts --metabat2 --cocacola --metagen --mode megahit
+  --nb_ref 50 --metabat2 --cocacola --metagen --mode megahit
   --blast_db ~/blast_db/refs_seq --link_ref_id_species ~/link_id_species.tsv
   --index_prefix spades_contigs
 ```
