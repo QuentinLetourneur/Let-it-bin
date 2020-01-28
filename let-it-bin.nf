@@ -100,10 +100,11 @@ if( params.help ) {
 params.reads = " "
 params.nb_samples = ""
 params.cpus = 4
+params.memtrimming = '5g'
 params.cpumapping = 4
 params.memmapping = '5000'
 params.cpuassembly = 10
-params.memassembly = '160000'
+params.memassembly = 160000
 params.cpubinning = params.cpus
 params.out = " "
 params.binDir = "${params.out}/Binnings"
@@ -147,7 +148,7 @@ params.metabat2Dir = "${params.binDir}/Metabat2"
 params.multi_assembly = "F"
 params.contigs = ""
 params.count_matrix = ""
-params.interleaved = ""
+// params.interleaved = ""
 params.refs_info = ""
 params.link_ref_id_species = "" // take the absolute path to the file containing the link between reference genome IDs and species name
 params.blast_db = ""
@@ -221,19 +222,30 @@ if( params.contaminant != "" && params.reads != " ") {
         set pair_id, file(forward), file(reverse) from unmappedChannel
 
         output:
-        set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into trimChannel
-        set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into mappingChannel
-        file("*alien*.fastq") into outChannel mode flatten
+        set pair_id, file("*_paired_1.fastq"), file("*_paired_2.fastq") into trimChannel
+        set pair_id, file("*_paired_1.fastq"), file("*_paired_2.fastq") into mappingChannel
+        file("*paired_?.fastq") into outChannel mode flatten
 
-        script:
+        shell:
         """
-        AlienTrimmer -if ${forward} -ir ${reverse} -of ${pair_id}_alien_1.fastq \
-        -or ${pair_id}_alien_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
-        -l ${params.minlength}
+        AlienTrimmer -if !{forward} -ir !{reverse} -of !{pair_id}_alien_1.fastq \
+        -or !{pair_id}_alien_2.fastq -os un-conc-mate_sgl.fastq -c !{params.alienseq} \
+        -l !{params.minlength} -p 80
+
+        awk 'NR % 4 == 1 {gsub("/1\$","",\$0);gsub(" 1:.*","",\$0); print \$0}' !{pair_id}_alien_1.fastq > r1_headers.txt
+        awk 'NR % 4 == 1 {gsub("/2\$","",\$0);gsub(" 2:.*","",\$0); print \$0}' !{pair_id}_alien_2.fastq > r2_headers.txt
+
+        if [ `diff -q r1_headers r2_headers | wc -l` != "0" ];then
+            #filter out single reads
+            /home/bbmap/repair.sh in=!{pair_id}_alien_1.fastq in2=!{pair_id}_alien_2.fastq out=!{pair_id}_paired_1.fastq out2=!{pair_id}_paired_2.fastq outs=!{pair_id}_single.fastq -Xmx!{params.memtrimming}
+            rm !{pair_id}_alien_1.fastq !{pair_id}_alien_2.fastq
+        else
+            mv !{pair_id}_alien_1.fastq !{pair_id}_paired_1.fastq
+            mv !{pair_id}_alien_2.fastq !{pair_id}_paired_2.fastq
+        fi
         """
     }
     outChannel.subscribe { it.copyTo(cleanDir) }
-    skiptrim = 'F'
 
 }
 else if( file("${params.cleaned_readsDir}/*.f*q").size < params.nb_samples && params.reads != " " ) {
@@ -248,22 +260,34 @@ else if( file("${params.cleaned_readsDir}/*.f*q").size < params.nb_samples && pa
         set pair_id, file(reads) from readChannel
 
         output:
-        set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into trimChannel
-        set pair_id, file("*_alien_1.fastq"), file("*_alien_2.fastq") into mappingChannel
-        file("*alien*.fastq") into outChannel mode flatten
+        set pair_id, file("*_paired_1.fastq"), file("*_paired_2.fastq") into trimChannel
+        set pair_id, file("*_paired_1.fastq"), file("*_paired_2.fastq") into mappingChannel
+        file("*paired_?.fastq") into outChannel mode flatten
 
-        script:
+        shell:
         """
-        AlienTrimmer -if ${reads[0]} -ir ${reads[1]} -of ${pair_id}_alien_1.fastq \
-        -or ${pair_id}_alien_2.fastq -os un-conc-mate_sgl.fastq -c ${params.alienseq} \
-        -l ${params.minlength}
+        AlienTrimmer -if !{reads[0]} -ir !{reads[1]} -of !{pair_id}_alien_1.fastq \
+        -or !{pair_id}_alien_2.fastq -os un-conc-mate_sgl.fastq -c !{params.alienseq} \
+        -l !{params.minlength} -p 80
+
+        awk 'NR % 4 == 1 {gsub("/1\$","",\$0);gsub(" 1:.*","",\$0); print \$0}' !{pair_id}_alien_1.fastq > r1_headers.txt
+        awk 'NR % 4 == 1 {gsub("/2\$","",\$0);gsub(" 2:.*","",\$0); print \$0}' !{pair_id}_alien_2.fastq > r2_headers.txt
+
+        if [ `diff -q r1_headers r2_headers | wc -l` != "0" ];then
+            #filter out single reads
+            /home/bbmap/repair.sh in=!{pair_id}_alien_1.fastq in2=!{pair_id}_alien_2.fastq out=!{pair_id}_paired_1.fastq out2=!{pair_id}_paired_2.fastq outs=!{pair_id}_single.fastq -Xmx!{params.memtrimming}
+            rm !{pair_id}_alien_1.fastq !{pair_id}_alien_2.fastq
+        else
+            mv !{pair_id}_alien_1.fastq !{pair_id}_paired_1.fastq
+            mv !{pair_id}_alien_2.fastq !{pair_id}_paired_2.fastq
+        fi
         """
     }
     outChannel.subscribe { it.copyTo(cleanDir) }
 }
 else {
-    trimChannel = Channel.fromFilePairs("${params.cleaned_readsDir}/*_{1,2}.{fastq,fq}").ifEmpty { exit 1, "No cleaned reads were found in ${params.cleaned_readsDir}"}.map{it.flatten()}
-    mappingChannel = Channel.fromFilePairs("${params.cleaned_readsDir}/*_{1,2}.{fastq,fq}").ifEmpty { exit 1, "No cleaned reads were found in ${params.cleaned_readsDir}"}.map{it.flatten()}
+    trimChannel = Channel.fromFilePairs("${params.cleaned_readsDir}/*{1,2}.{fastq,fq}").ifEmpty { exit 1, "No cleaned reads were found in ${params.cleaned_readsDir}"}.map{it.flatten()}
+    mappingChannel = Channel.fromFilePairs("${params.cleaned_readsDir}/*{1,2}.{fastq,fq}").ifEmpty { exit 1, "No cleaned reads were found in ${params.cleaned_readsDir}"}.map{it.flatten()}
 }
 
 // Perform a co-assembly
@@ -285,9 +309,13 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             """
             interleave-reads.py ${fw} ${rv} --output interleaved.pe
             normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+            rm interleaved.pe
             filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+            rm output.pe.keep
             extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+            rm output.pe.filter
             split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+            rm output.dn.pe
             mkdir -p ${params.out}/khmer_res
             cp *filt*fastq ${params.out}/khmer_res
             """
@@ -306,21 +334,20 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
         file R2 from R2_Channel.toList()
 
         output:
-        set val("mergefstq"), file("mergefstq_1.fastq"), file("mergefstq_2.fastq") into mergeChannel
+        set val("mergesamples"), file("mergesamples_1.fastq"), file("mergesamples_2.fastq") into mergeChannel
 
         shell:
         """
-        cat !{R1} > mergefstq_1.fastq
-        cat !{R2} > mergefstq_2.fastq
+        cat !{R1} > mergesamples_1.fastq
+        cat !{R2} > mergesamples_2.fastq
         """
     }
 
     process assembly_co {
-        publishDir "$myDir", mode: 'copy'
 
         if(params.mode != "ray") {
             cpus params.cpuassembly
-            if(params.memassembly <= '160000') {
+            if(params.memassembly <= 160000) {
                 errorStrategy { task.exitStatus == 143 ? 'retry' : 'terminate' }
                 maxRetries 2
                 memory { params.memassembly * task.attempt }
@@ -387,6 +414,7 @@ if( params.contigs == "" && params.multi_assembly == "F" ) {
             echo "ERROR : the mode should be either spades, minia, megahit, ray or clc if you have it on your system"
             exit 1
         fi
+        cp -r assembly !{params.out}
         """
     }
 
@@ -511,15 +539,19 @@ else if( params.contigs == "" && params.multi_assembly == "T" ) {
 
             output:
             set pair_id, file("*_filt_1.fastq"), file("*_filt_2.fastq") into khmerChannel
-            file("interleaved.pe") into conv_fastqChannel
+            // file("interleaved.pe") into conv_fastqChannel
 
             script:
             """
             interleave-reads.py ${fw} ${rv} --output interleaved.pe
-            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output output.pe.keep
+            normalize-by-median.py -p -k 20 -C 20 -N 4 -x 3e9 --savegraph graph.ct  interleaved.pe --output
+            rm interleaved.pe
             filter-abund.py -V graph.ct output.pe.keep --output output.pe.filter -T ${params.cpus}
+            rm output.pe.keep
             extract-paired-reads.py output.pe.filter --output-paired output.dn.pe  --output-single output.dn.se
+            rm output.pe.filter
             split-paired-reads.py output.dn.pe -1 ${pair_id}_filt_1.fastq -2 ${pair_id}_filt_2.fastq
+            rm output.dn.pe
             mkdir -p ${params.out}/khmer_res
             cp *filt*fastq ${params.out}/khmer_res
             """
@@ -980,7 +1012,7 @@ if( params.canopy != " " || params.all == "T" ) {
 
         output:
         set val("Canopy"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into canopyChannel
-        val("a") into canopyChannel_2
+        // val("a") into canopyChannel_2
         val("Canopy") into canopyChannel_3
         file("*clustering.tsv") into canopyChannel_4
 
@@ -1009,9 +1041,9 @@ if( params.canopy != " " || params.all == "T" ) {
 }
 else {
     canopyChannel = Channel.empty()
-    canopyChannel_2 = Channel.from("a")
+    // canopyChannel_2 = Channel.from("a")
     canopyChannel_3 = Channel.empty()
-    canopyChannel_4 = Channel.empty()
+    canopyChannel_4 = Channel.from("")
 }
 
 if( params.maxbin != " " || params.all == "T" ) {
@@ -1027,7 +1059,7 @@ if( params.maxbin != " " || params.all == "T" ) {
 
         output:
         set val("MaxBin"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into maxbinChannel
-        val("a") into maxbinChannel_2
+        // val("a") into maxbinChannel_2
         val("MaxBin") into maxbinChannel_3
         file("*clustering.tsv") into maxbinChannel_4
 
@@ -1058,9 +1090,9 @@ if( params.maxbin != " " || params.all == "T" ) {
 }
 else {
     maxbinChannel = Channel.empty()
-    maxbinChannel_2 = Channel.from("a")
+    // maxbinChannel_2 = Channel.from("a")
     maxbinChannel_3 = Channel.empty()
-    maxbinChannel_4 = Channel.empty()
+    maxbinChannel_4 = Channel.from("")
 }
 
 if( params.metabat != " " || params.all == "T" ) {
@@ -1076,14 +1108,14 @@ if( params.metabat != " " || params.all == "T" ) {
 
         output:
         set val("Metabat"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into metabatChannel
-        val("a") into metabatChannel_2
+        // val("a") into metabatChannel_2
         val("Metabat") into metabatChannel_3
-        val("*clustering.tsv") into metabatChannel_4
+        file("*clustering.tsv") into metabatChannel_4
 
         shell:
         """
         if [ "!{params.min_contig_length}" -le "1500" ];then
-            metabat1 -i !{assembly} -a depth.txt -o bin -t !{params.cpubinning} --seed 10
+            metabat1 -i !{assembly} -a depth.txt -o bin -t !{params.cpubinning} --seed 10 -m 1500
         else
             metabat1 -i !{assembly} -a depth.txt -o bin -t !{params.cpubinning} -m !{params.min_contig_length} --seed 10
         fi
@@ -1102,9 +1134,9 @@ if( params.metabat != " " || params.all == "T" ) {
 }
 else {
     metabatChannel = Channel.empty()
-    metabatChannel_2 = Channel.from("a")
+    // metabatChannel_2 = Channel.from("a")
     metabatChannel_3 = Channel.empty()
-    metabatChannel_4 = Channel.empty()
+    metabatChannel_4 = Channel.from("")
 }
 
 if( params.metabat2 != " " || params.all == "T" ) {
@@ -1120,9 +1152,9 @@ if( params.metabat2 != " " || params.all == "T" ) {
 
         output:
         set val("Metabat2"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into metabat2Channel
-        val("a") into metabat2Channel_2
+        // val("a") into metabat2Channel_2
         val("Metabat2") into metabat2Channel_3
-        val("*clustering.tsv") into metabat2Channel_4
+        file("*clustering.tsv") into metabat2Channel_4
 
         shell:
         """
@@ -1146,9 +1178,9 @@ if( params.metabat2 != " " || params.all == "T" ) {
 }
 else {
     metabat2Channel = Channel.empty()
-    metabat2Channel_2 = Channel.from("a")
+    // metabat2Channel_2 = Channel.from("a")
     metabat2Channel_3 = Channel.empty()
-    metabat2Channel_4 = Channel.empty()
+    metabat2Channel_4 = Channel.from("")
 }
 
 if( params.concoct != " " || params.all == "T" ) {
@@ -1163,7 +1195,7 @@ if( params.concoct != " " || params.all == "T" ) {
 
         output:
         set val("Concoct"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into concoctChannel
-        val("a") into concoctChannel_2
+        // val("a") into concoctChannel_2
         val("Concoct") into concoctChannel_3
         file("*clustering.tsv") into concoctChannel_4
 
@@ -1186,9 +1218,9 @@ if( params.concoct != " " || params.all == "T" ) {
 }
 else {
     concoctChannel = Channel.empty()
-    concoctChannel_2 = Channel.from("a")
+    // concoctChannel_2 = Channel.from("a")
     concoctChannel_3 = Channel.empty()
-    concoctChannel_4 = Channel.empty()
+    concoctChannel_4 = Channel.from("")
 }
 
 if( params.cocacola != " " || params.all == "T" ) {
@@ -1204,7 +1236,7 @@ if( params.cocacola != " " || params.all == "T" ) {
 
         output:
         set val("Cocacola"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into cocacolaChannel
-        val("a") into cocacolaChannel_2
+        // val("a") into cocacolaChannel_2
         val("Cocacola") into cocacolaChannel_3
         file("*clustering.tsv") into cocacolaChannel_4
 
@@ -1241,9 +1273,9 @@ if( params.cocacola != " " || params.all == "T" ) {
 }
 else {
     cocacolaChannel = Channel.empty()
-    cocacolaChannel_2 = Channel.from("a")
+    // cocacolaChannel_2 = Channel.from("a")
     cocacolaChannel_3 = Channel.empty()
-    cocacolaChannel_4 = Channel.empty()
+    cocacolaChannel_4 = Channel.from("")
 }
 
 if( params.metagen != " " || params.all == "T" ) {
@@ -1260,7 +1292,7 @@ if( params.metagen != " " || params.all == "T" ) {
 
         output:
         set val("MetaGen"), file("${refs_info}"), file("${contigs_annot}"), file("bin*") into metagenChannel
-        val("a") into metagenChannel_2
+        // val("a") into metagenChannel_2
         val("MetaGen") into metagenChannel_3
         file("*clustering.tsv") into metagenChannel_4
 
@@ -1294,9 +1326,9 @@ if( params.metagen != " " || params.all == "T" ) {
 }
 else {
     metagenChannel = Channel.empty()
-    metagenChannel_2 = Channel.from("a")
+    // metagenChannel_2 = Channel.from("a")
     metagenChannel_3 = Channel.empty()
-    metagenChannel_4 = Channel.empty()
+    metagenChannel_4 = Channel.from("")
 }
 
 if( params.binsanity != " " || params.all == "T" ) {
@@ -1314,7 +1346,7 @@ if( params.binsanity != " " || params.all == "T" ) {
 
         output:
         set val("BinSanity-wf"), file("${refs_info}"), file("${contigs_annot}"), file("*.fa") into binsanityChannel
-        val("a") into binsanityChannel_2
+        // val("a") into binsanityChannel_2
         val("BinSanity-wf") into binsanityChannel_3
         file("*clustering.tsv") into binsanityChannel_4
 
@@ -1344,9 +1376,9 @@ if( params.binsanity != " " || params.all == "T" ) {
 }
 else {
     binsanityChannel = Channel.empty()
-    binsanityChannel_2 = Channel.from("a")
+    // binsanityChannel_2 = Channel.from("a")
     binsanityChannel_3 = Channel.empty()
-    binsanityChannel_4 = Channel.empty()
+    binsanityChannel_4 = Channel.from("")
 }
 
 if( params.dastool == "T" ) {
@@ -1376,8 +1408,8 @@ if( params.dastool == "T" ) {
         """
         input=""
         for file in !{inp1} !{inp2} !{inp3} !{inp4} !{inp5} !{inp6} !{inp7} !{inp8};do
-            if [ \$file != "" ];then
-                if [ \$input == "" ];then
+            if [[ "\$file" =~ "clustering" ]];then
+                if [[ \$input == "" ]];then
                     input=\$file
                 else
                     input="\$input,\$file"
