@@ -40,7 +40,8 @@ To run this pipeline you will need Nextflow and Singularity (tested with version
 Here are the links to the installation instruction for [Nextflow](https://www.nextflow.io/docs/latest/getstarted.html) and [Singularity](https://github.com/sylabs/singularity/blob/master/INSTALL.md)
 
 The singularity image can be downloaded here (warning: the file is heavy ~ 1.9Go):
-```wget ftp://shiny01.hosting.pasteur.fr/pub/let-it-bin.simg
+``` 
+wget ftp://shiny01.hosting.pasteur.fr/pub/let-it-bin.simg
 ```
 A recipe file named Singularity is also given.  
 To build the image on an unix system move to let-it-bin repository and lauch  
