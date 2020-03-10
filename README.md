@@ -40,7 +40,7 @@ To run this pipeline you will need Nextflow and Singularity (tested with version
 Here are the links to the installation instruction for [Nextflow](https://www.nextflow.io/docs/latest/getstarted.html) and [Singularity](https://github.com/sylabs/singularity/blob/master/INSTALL.md)
 
 The singularity image can be downloaded here (warning: the file is heavy ~ 1.9Go):
-``` 
+```
 wget ftp://shiny01.hosting.pasteur.fr/pub/let-it-bin.simg
 ```
 A recipe file named Singularity is also given.  
@@ -56,7 +56,7 @@ This will take at least an hour.
 Only needed if you start from raw reads or reads from which contaminant have been removed
   --nb_samples [INT] Number of samples you are using
   --out [PATH] Directory were will be stored the results of the pipeline
-  --sim_data [CHAR] Can be either T (Default) or F. Will change the execution of the pipeline depending on the analysed data (simulated or not).
+  --sim_data [CHAR] Can be either F (Default) or T. Will change the execution of the pipeline depending on the analysed data (simulated or not).
   --cpus [INT] Number of cpus used for task with multiprocessing (Default 4)
   --min_contigs_length [INT] Minimum contigs length in base to be passed to binning programms (Default 1000)
   --nb_ref [INT] If you use simulated data specify the total number of different genomes present in the samples
