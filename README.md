@@ -1,7 +1,14 @@
-## Description
+# Let-it-bin
 
-Let-it-bin has been developped to analyse metagenomic short paired-end reads data from multiple samples
-It can be used on simulated data to benchmark binners performance or real data where binning results will only be evaluated by a reference free approach.
+## Contents
+
+- [Introduction](#introduction)
+- [Prerequisites](#prerequisites)
+- [Pipeline inputs and options](#Pipeline_inputs_and_options)
+
+## Introduction
+
+Let-it-bin allows to perform the binning of  metagenomic short paired-end reads from multiple samples into species.
 The pipeline take raw paired-end reads from multiple samples as primary input (the pairs names MUST finish with _{1,2}.fq/fastq). It comprise 4 major steps, reads preprocessing, assembly, binning and evaluation.
 The pipeline can be started from the second or third step by adding arguments to the command line, provided that you have the needed inputs.
 You have to select the binning softwares that will run in the following list :
@@ -28,11 +35,14 @@ The output directory have the following layout :
 |__mapping
 ```
 ## Prerequisites
+
 To run this pipeline you will need Nextflow and Singularity (tested with version 19.10.0.5170 and 3.5.0 respectively).  
 Here are the links to the installation instruction for [Nextflow](https://www.nextflow.io/docs/latest/getstarted.html) and [Singularity](https://github.com/sylabs/singularity/blob/master/INSTALL.md)
 
-### Building the Singulairty image
-A recipe file named Singularity is given.  
+The singularity image can be downloaded here (warning: the file is heavy ~ 1.9Go):
+```wget ftp://shiny01.hosting.pasteur.fr/pub/let-it-bin.simg
+```
+A recipe file named Singularity is also given.  
 To build the image on an unix system move to let-it-bin repository and lauch  
 `sudo singularity build let-it-bin.simg Singularity`  
 This will take at least an hour.
@@ -77,7 +87,7 @@ Else no retry will be done
 
     CONTIGS ANNOTATION :
 
-  --blast_db [PATH] If you use simulated data. Path to the BLAST database containing reference sequences (HAVE TO be computed before running the pipeline)
+  --blast_db [PATH] If you use simulated data. Path to the BLAST database containing reference sequences (HAVE TO be computed before running the pipeline)
   --coverage [INT] Coverage threshold used to filter alignments of contigs on reference genomes or a public database (Default 90)
   --identity [INT] Identity threshold used to filter alignments of contigs on reference genomes or a public database (Default 95)
   --mismatch [INT] Number of mismatch allowed in the seed aligment of BLAST (Default 1)
@@ -112,9 +122,7 @@ Else no retry will be done
 ## Examples
 For real data starting from raw reads or reads filtered from contaminant and co-assembly with Spades.
 ```
-  ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files]
-  let-it-bin.nf --reads ~/data/reads --out ~/results --sim_data F --cpus 4
-  --metabat --canopy --maxbin --index_prefix spades_contigs
+  ~/nextflow -c ~/let-it-bin/nextflow_slurm_singularity_common.config run -w [directory to store temporary files] let-it-bin.nf --reads ~/data/reads --out ~/results --cpus 4 --metabat --canopy --maxbin --index_prefix spades_contigs --tmp_checkm tmp
 ```
 For simulated data starting from raw reads and co-assembly with megahit
 ```
