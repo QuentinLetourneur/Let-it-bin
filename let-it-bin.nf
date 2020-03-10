@@ -38,7 +38,7 @@ def usage() {
     println("  --reads [PATH] Directory containing unzipped paired reads files.\nOnly needed if you start from raw reads or reads from which contaminant have been removed")
     println("  --nb_samples [INT] Number of samples you are using")
     println("  --out [PATH] Directory were will be stored the results of the pipeline")
-    println("  --sim_data [CHAR] Can be either T (Default) or F. Will change the execution of the pipeline depending on the analysed data (simulated or not).")
+    println("  --sim_data [CHAR] Can be either F (Default) or T. Will change the execution of the pipeline depending on the analysed data (simulated or not).")
     println("  --cpus [INT] Number of cpus used for task with multiprocessing (Default 4)")
     println("  --min_contigs_length [INT] Minimum contigs length in base to be passed to binning programms (Default 1000)")
     println("  --nb_ref [INT] If you use simulated data specify the total number of different genomes present in the samples")
@@ -134,6 +134,7 @@ params.metagen = " "
 params.binsanity = " "
 params.metabat2 = " "
 params.all = "F"
+//## Do not modify or CheckM won't be able to find the inputs ##
 params.metabatDir = "${params.binDir}/Metabat"
 params.concoctDir = "${params.binDir}/Concoct"
 params.cocacolaDir = "${params.binDir}/Cocacola"
@@ -142,6 +143,7 @@ params.canopyDir = "${params.binDir}/Canopy"
 params.metagenDir = "${params.binDir}/MetaGen"
 params.binsanityDir = "${params.binDir}/BinSanity-wf"
 params.metabat2Dir = "${params.binDir}/Metabat2"
+//##
 params.multi_assembly = "F"
 params.contigs = ""
 params.count_matrix = ""
@@ -1409,6 +1411,8 @@ if( params.dastool == "T" ) {
         done
 
         DAS_Tool -i \$input -c !{assembly} -o ./out --score_threshold 0 --write_bins 1 -t !{params.cpus} --search_engine blast
+
+        cp ./out_DASTool_bins/*.fa !{params.dastoolDir}
         """
     }
 }
